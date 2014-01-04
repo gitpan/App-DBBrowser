@@ -14,6 +14,7 @@ all_pod_files_spelling_ok( 'bin', 'lib' );
 
 __DATA__
 BNRY
+PrintTable
 Colwidth
 Ctrl
 Kiem

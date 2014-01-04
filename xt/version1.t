@@ -4,7 +4,7 @@ use warnings;
 use Test::More;
 
 
-use Test::Version 1.001001 qw( version_all_ok ), {
+use Test::Version qw( version_all_ok ), {
     is_strict   => 1,
     has_version => 1,
 };
