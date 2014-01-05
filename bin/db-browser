@@ -4,12 +4,12 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.003';
+our $VERSION = '0.004';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
 use File::Find            qw(find);
-use File::Spec::Functions qw(catfile catdir rel2abs);
+use File::Spec::Functions qw(catfile catdir);
 use Getopt::Long          qw(GetOptions);
 use List::Util            qw(sum);
 use Pod::Usage            qw(pod2usage);
@@ -19,7 +19,7 @@ use Clone             qw(clone);
 use DBI               qw();
 use JSON::XS          qw();
 use File::HomeDir     qw(my_home);
-use List::MoreUtils   qw(any none first_index pairwise);
+use List::MoreUtils   qw(any first_index pairwise);
 use Term::Choose      qw(choose);
 use Term::ProgressBar qw();
 use Term::ReadKey     qw(GetTerminalSize ReadKey ReadMode);
@@ -2744,7 +2744,7 @@ sub available_databases {
         $databases = $dbh->selectcol_arrayref( $stmt, {} );
     }
     else {
-        no_entry_for_db_driver( $info->{db_driver} );
+        die 'No entry for "' . $info->{db_driver} . '"!';
     }
     return $databases;
 }
@@ -2752,9 +2752,13 @@ sub available_databases {
 
 sub get_schema_names {
     my ( $info, $opt, $dbh, $db ) = @_;
-    return [ 'main' ] if $info->{db_driver} eq 'SQLite';
-    return [ $db ]    if $info->{db_driver} eq 'mysql';
-    if ( $info->{db_driver} eq 'Pg' ) {
+    if ( $info->{db_driver} eq 'SQLite' ) {
+        return [ 'main' ];
+    }
+    elsif ( $info->{db_driver} eq 'mysql' ) {
+        return [ $db ];
+    }
+    elsif ( $info->{db_driver} eq 'Pg' ) {
         # Schema names beginning with pg_ are reserved for system purposes and cannot be created by users.
         my $stmt;
         if ( ! $opt->{sql}{system_info}[v] ) {
@@ -2770,7 +2774,9 @@ sub get_schema_names {
         my $schemas = $dbh->selectcol_arrayref( $stmt, {} );
         return $schemas;
     }
-    no_entry_for_db_driver( $info->{db_driver} );
+    else {
+        die 'No entry for "' . $info->{db_driver} . '"!';
+    }
 }
 
 
@@ -2932,7 +2938,7 @@ sub sql_regexp {
             return ' REGEXP_LIKE(' . $quote_col . ',?)'       if   $opt->{sql}{regexp_case}[v];
         }
     }
-    no_entry_for_db_driver( $info->{db_driver} );
+    die 'No entry for "' . $info->{db_driver} . '"!';
 }
 
 
@@ -2986,16 +2992,12 @@ sub col_functions {
 }
 
 
-sub no_entry_for_db_driver {
-    my ( $db_driver ) = @_;
-    die "No entry for \"$db_driver\"!";
-}
-
-
 
 
 
 __END__
+
+
 
 =pod
 
@@ -3003,11 +3005,11 @@ __END__
 
 =head1 NAME
 
-db-browser - Search and read in SQLite/MySQL/PostgreSQL databases.
+C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.003
+Version 0.004
 
 =cut
 
@@ -3015,123 +3017,167 @@ Version 0.003
 
 =head2 SQLite/MySQL/PostgreSQL
 
-db-browser
+    db-browser
 
-db-browser -h|--help
+    db-browser -h|--help
 
-    -h|--help    show the config menu (which offers also this help text).
+When the C<db-browser> is called with the argument C<-h|--help> it shows a menu - see L</Options>.
 
 =head2 SQLite
 
-db-browser [-s|--search] [directories to be searched]
+    db-browser [-s|--search] [directories to be searched]
 
-If no directories are passed the home directory is searched for SQLite databases.
+If no directories are passed the home directory is searched for C<SQLite> databases.
 
-    -s|--search    new search of SQLite databases (don't use cached data).
+C<db-browser> called with C<-s|--search> causes a new search of C<SQLite> databases instead of using the cached data.
 
 =head1 DESCRIPTION
 
-Search and read in SQLite/MySQL/PostgreSQL databases.
+Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
-db-browser expects an "UTF-8" environment
+To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database privileges required for fetching the respective data.
 
-"q" key goes back ("Ctrl-D" instead of "q" if prompted for a string).
+The C<db-browser> expects an C<UTF-8> environment.
 
-=head1 Options
+The configuration file and the file with the cached search results for SQLite databases are located in the I<$HOME/.db_browser_conf> directory.
 
-=head2 Help
+=head1 USAGE
+
+The best way to find out how C<db-browser> works is calling C<db-browser>.
+
+To be able to use all the features of the C<db-browser> some basic C<SQL> knowledge is required.
+
+=head3 Keys to move around
+
+=over
+
+=item *
+
+the C<Arrow> keys (or C<hjkl>) to move up and down respectively to move right and left.
+
+=item *
+
+the C<PageUp> key (or C<Ctrl-B>) to go back one page, the C<PageDown> key (or C<Ctrl-F>) to go forward one page.
+
+=item *
+
+the C<Home> key (or C<Ctrl-A>) to jump to the beginning of the menu, the C<End> key (or C<Ctrl-E>) to jump to the end of the menu.
+
+=item *
+
+the C<Enter/Return> key to confirm a chosen menu item.
+
+=back
+
+The C<q> key goes back (C<Ctrl-D> instead of C<q> if prompted for a string) in the menu hierarchy.
+
+=head2 OPTIONS
+
+=head3 Help
 
 Show this Info.
 
-=head2 Tabwidth
+=head3 Tabwidth
 
 Set the number of spaces between columns.
 
-=head2 Colwidth
+=head3 Colwidth
 
 Set the width the columns should have at least when printed.
 
-=head2 Undef
+=head3 Undef
 
 Set the string that will be shown on the screen if a table value is undefined.
 
-=head2 Rows
+=head3 Rows
 
-Set the maximum number of fetched table rows. Can be overwritten by setting a SQL "LIMIT" statement.
+Set the maximum number of fetched table rows. This can be overwritten by setting a C<SQL> C<LIMIT> statement.
 
-=head2 ProgressBar
+=head3 ProgressBar
 
 Set the progress bar threshold. The threshold refers to the list size (rows x columns).
 
-=head2 DB drivers
+=head3 DB drivers
 
 Choose the needed database drivers.
 
-=head2 Operators
+=head3 Operators
 
 Choose the needed operators.
 
-=head2 Separator
+=head3 Separator
 
 Choose the thousands separator displayed in menus.
 
-=head2 Sssc mode
+=head3 Sssc mode
 
-With the Sssc mode "compat" enabled back-arrows are offered in the SQL "sub-statement" menus. In the "simple" mode it can be used the "q" key instead of the back-arrows.
+With the I<Sssc> mode "compat" enabled back-arrows are offered in the C<SQL> "sub-statement" menus. In the "simple" mode it can be used the C<q> key instead of the back-arrows.
 
-To reset a SQL "sub-statement" (e.g WHERE) re-enter into the "sub-statement" and choose '- OK -'.
+To reset a C<SQL> "sub-statement" (e.g C<WHERE>) re-enter into the "sub-statement" and choose C<'- OK -'>.
 
-=head2 Expand
+=head3 Expand
 
 Set the behavior of different menus.
 
-=head2 Mouse mode
+For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Expand> to "Enchanted" means: save the menu position.
 
-Set the mouse mode (see L<Term::Choose/mouse>).
+For "Print Table" "Enchanted" means: enable printing the chosen row.
 
-=head2 Lock
+=head3 Mouse mode
 
-Set the default value: Lk0 or Lk1.
+Set the I<mouse mode> (see L<Term::Choose/mouse>).
 
-- Lk0: Reset the SQL-statement after each "PrintTable".
+=head3 Lock
 
-- Lk1: Reset the SQL-statement only when a table is selected.
+Set the default I<lock> value:
 
-=head2 Metadata
+- Lk0: Reset the C<SQL>-statement after each "PrintTable".
+
+- Lk1: Reset the C<SQL>-statement only when a table is selected.
+
+=head3 Metadata
 
 If enabled system tables/schemas/databases are appended to the respective list.
 
-=head2 Regexp case
+=head3 Regexp case
 
-If enabled REGEXP will match case sensitive.
+If enabled C<REGEXP> will match case sensitive.
 
-With MySQL the sensitive match is achieved be enabling the BINARY operator.
+With C<MySQL> the sensitive match is achieved by enabling the C<BINARY> operator.
 
-=head2 "Binary filter"
+=head3 DB login
 
-Print "BNRY" instead of arbitrary binary data.
-
-If the data matches the repexp /[\x00-\x08\x0B-\x0C\x0E-\x1F]/ it is considered arbitrary binary data.
-
-Printing arbitrary binary data could break the output.
-
-=head2 DB defaults
-
-Set Database defaults:
-
-Different Database settings ...
-
-Database defaults can be overwritten for each Database with the "Database settings".
-
-=head2 DB login
-
-Determine how often I<db-browser> asks for the login data:
+Determine how often C<db-browser> asks for the login data:
 
 - for every connection: log in data is asked for every new database connection.
 
 - once per DB: log in data is asked only once per database.
 
 - only once: log in data is asked only once and then used for all connections.
+
+=head3 DB defaults
+
+Set Database defaults:
+
+=head4 Default user
+
+If set the I<default user> is used as username for database logins.
+
+=head4 Enable utf8
+
+If enabled the C<utf8> flag will be turned on for character data coming from the database.
+
+For a more detailed explanation see the documentation of the respective Perl C<DBI> driver.
+
+=head4 "Binary filter"
+
+Print "BNRY" instead of arbitrary binary data.
+
+If the data matches the repexp C</[\x00-\x08\x0B-\x0C\x0E-\x1F]/> it is considered arbitrary binary data.
+
+Printing arbitrary binary data could break the output.
+
+Database defaults can be overwritten for each Database with the "Database settings".
 
 =head1 AUTHOR
 

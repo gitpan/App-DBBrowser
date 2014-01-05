@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.003';
+our $VERSION = '0.004';
 
 
 1;
@@ -17,35 +17,45 @@ __END__
 
 =head1 NAME
 
-App::DBBrowser - Search and read in SQLite/MySQL/PostgreSQL databases.
+App::DBBrowser - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.003
+Version 0.004
 
 =head1 SYNOPSIS
 
 =head2 SQLite/MySQL/PostgreSQL
 
-db-browser
+    db-browser
 
-db-browser -h|--help
+    db-browser -h|--help
 
-    -h|--help    show the config menu (which offers also a help text).
+C<db-browser> called with C<-h|--help> shows a menu which offers also a C<HELP> text.
 
 =head2 SQLite
 
-db-browser [-s|--search] [directories to be searched]
+    db-browser [-s|--search] [directories to be searched]
 
 If no directories are passed the home directory is searched for SQLite databases.
 
-    -s|--search    new search of SQLite databases (don't use cached data).
+C<db-browser> called with C<-s|--search> causes a new search of SQLite databases.
 
 =head1 DESCRIPTION
 
-Search and read in SQLite/MySQL/PostgreSQL databases.
+Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
-For further information see L<db-browser>
+For further information see L<db-browser>.
+
+=head1 REQUIREMENTS
+
+The C<db-browser> does not work on MS Windows OS.
+
+It is required Perl version 5.10.1 or greater.
+
+The C<db-browser> expects> an C<UTF-8> environment.
+
+See also the requirements mentioned in L<Term::Choose> which itself is required by the C<db-browser>.
 
 =head1 AUTHOR
 

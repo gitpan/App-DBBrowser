@@ -1,6 +1,11 @@
 Revision history for App-DBBrowser
 
 
+0.004   2014-01-05
+        - Changed some error handling.
+        - Code clean up and refactoring.
+        - Improved documentation.
+
 0.003   2014-01-04
         - Fixed documentation.
 
