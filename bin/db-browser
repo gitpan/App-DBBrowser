@@ -4,7 +4,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.004';
+our $VERSION = '0.005';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -35,8 +35,10 @@ use constant {
     BSPACE         => 0x7f,
     GO_TO_TOP_LEFT => "\e[1;1H",
     CLEAR_EOS      => "\e[0J",
-    v              => 0,
-    chs            => 1,
+};
+use constant {
+    v   => 0,
+    chs => 1,
 };
 
 my $home = File::HomeDir->my_home();
@@ -52,60 +54,59 @@ else {
 }
 
 my $info = {
-    home                 => $home,
-    config_file          => catfile( $config_dir, 'config.json' ),
-    db_cache_file        => catfile( $config_dir, 'cache_db_search.json' ),
-    lyt_stmt             => { layout => 1, order => 0, justify => 2, clear_screen => 1, undef => '<<', lf => [0,4]  },
-    lyt_1                => { layout => 1, order => 0, justify => 2, clear_screen => 0, undef => '<<' },
-    lyt_stop             => { layout => 0, order => 1, justify => 0, clear_screen => 0 },
-    lyt_3_cs             => { layout => 3, order => 1, justify => 0, clear_screen => 1, undef => '  BACK' },
-    line_fold            => { Charset=> 'utf8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
-    back                 => 'BACK',
-    confirm              => 'CONFIRM',
-    ok                   => '- OK -',
-    _exit                => '  EXIT',
-    _help                => '  HELP',
-    _back                => '  BACK',
-    _confirm             => '  CONFIRM',
-    _continue            => '  CONTINUE',
-    _info                => '  INFO',
-    _reset               => '  RESET',
-    cached               => '',
-    binary_string        => 'BNRY',
-    aggregate_functions  => [ "AVG(X)", "COUNT(X)", "COUNT(*)", "MAX(X)", "MIN(X)", "SUM(X)" ],
-    available_operators  => [ "REGEXP", "NOT REGEXP", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL", "IN", "NOT IN",
-                             "BETWEEN", "NOT BETWEEN", " = ", " != ", " <> ", " < ", " > ", " >= ", " <= ",
-                             "LIKE col", "NOT LIKE col", "LIKE %col%", "NOT LIKE %col%",
-                             # "LIKE col%", "NOT LIKE col%", "LIKE %col", "NOT LIKE %col",
-                             " = col", " != col", " <> col", " < col", " > col", " >= col", " <= col" ],
-    available_db_drivers => [ 'SQLite', 'mysql', 'Pg' ],
-    hidd_func_pr         => { Epoch_to_Date => 'DATE', Truncate => 'TRUNC', Epoch_to_DateTime => 'DATETIME' },
-    keys_hidd_func_pr    => [ qw( Epoch_to_Date Truncate Epoch_to_DateTime ) ],
+    home              => $home,
+    config_file       => catfile( $config_dir, 'config.json' ),
+    db_cache_file     => catfile( $config_dir, 'cache_db_search.json' ),
+    lyt_stmt          => { layout => 1, order => 0, justify => 2, clear_screen => 1, undef => '<<', lf => [0,4]  },
+    lyt_1             => { layout => 1, order => 0, justify => 2, clear_screen => 0, undef => '<<' },
+    lyt_stop          => { layout => 0, order => 1, justify => 0, clear_screen => 0 },
+    lyt_3_cs          => { layout => 3, order => 1, justify => 0, clear_screen => 1, undef => '  BACK' },
+    line_fold         => { Charset=> 'utf8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
+    back              => 'BACK',
+    confirm           => 'CONFIRM',
+    ok                => '- OK -',
+    _exit             => '  EXIT',
+    _help             => '  HELP',
+    _back             => '  BACK',
+    _confirm          => '  CONFIRM',
+    _continue         => '  CONTINUE',
+    _info             => '  INFO',
+    _reset            => '  RESET',
+    cached            => '',
+    binary_string     => 'BNRY',
+    avail_aggregate   => [ "AVG(X)", "COUNT(X)", "COUNT(*)", "MAX(X)", "MIN(X)", "SUM(X)" ],
+    avail_operators   => [ "REGEXP", "NOT REGEXP", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL", "IN", "NOT IN", "BETWEEN", "NOT BETWEEN",
+                           " = ", " != ", " <> ", " < ", " > ", " >= ", " <= ", "LIKE col", "NOT LIKE col", "LIKE %col%", "NOT LIKE %col%",
+                           " = col", " != col", " <> col", " < col", " > col", " >= col", " <= col" ],
+                           # "LIKE col%", "NOT LIKE col%", "LIKE %col", "NOT LIKE %col",
+    avail_db_drivers  => [ 'SQLite', 'mysql', 'Pg' ],
+    hidd_func_pr      => { Epoch_to_Date => 'DATE', Truncate => 'TRUNC', Epoch_to_DateTime => 'DATETIME' },
+    keys_hidd_func_pr => [ qw( Epoch_to_Date Truncate Epoch_to_DateTime ) ],
 };
 
-my $default_db_drivers = [ 'SQLite', 'mysql', 'Pg' ];
-my $default_operators  = [ "REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS NOT NULL", "IN" ];
+my $my_db_drivers = [ 'SQLite', 'mysql', 'Pg' ];
+my $my_operators  = [ "REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS NOT NULL", "IN" ];
 
 my $opt = {
     print => {
-        tab_width       => [ 2,       '- Tabwidth' ],
-        min_col_width   => [ 30,      '- Colwidth' ],
-        undef           => [ '',      '- Undef' ],
-        limit           => [ 100_000, '- Rows' ],
-        progress_bar    => [ 20_000,  '- ProgressBar' ],
+        tab_width      => [ 2,       '- Tabwidth' ],
+        min_col_width  => [ 30,      '- Colwidth' ],
+        undef          => [ '',      '- Undef' ],
+        limit          => [ 100_000, '- Rows' ],
+        progress_bar   => [ 20_000,  '- ProgressBar' ],
     },
     sql => {
-        lock_stmt       => [ 0, '- Lock' ],
-        system_info     => [ 0, '- Metadata' ],
-        regexp_case     => [ 0, '- Regexp case' ],
+        lock_stmt      => [ 0, '- Lock' ],
+        system_info    => [ 0, '- Metadata' ],
+        regexp_case    => [ 0, '- Regexp case' ],
     },
     menu => {
-        thsd_sep        => [ ',',                '- Separator' ],
-        database_types  => [ $default_db_drivers,'- DB types' ],
-        operators       => [ $default_operators, '- Operators' ],
-        sssc_mode       => [ 0,                  '- Sssc mode' ],
-        mouse           => [ 0,                  '- Mouse mode' ],
-        expand          => [ 1,                  '- Expand' ],
+        thsd_sep       => [ ',',           '- Separator' ],
+        db_drivers     => [ $my_db_drivers,'- DB drivers' ],
+        operators      => [ $my_operators, '- Operators' ],
+        sssc_mode      => [ 0,             '- Sssc mode' ],
+        mouse          => [ 0,             '- Mouse mode' ],
+        expand         => [ 1,             '- Expand' ],
           keep_db_choice     => [ 0, '- Choose Database' ],
           keep_schema_choice => [ 0, '- Choose Schema' ],
           keep_table_choice  => [ 0, '- Choose Table' ],
@@ -116,15 +117,15 @@ my $opt = {
         db_defaults         => [ 'Dummy', '- DB defaults' ],
     },
     SQLite => {
-        reset_cache         => [ 0,     '- New search' ],
-        unicode             => [ 1,     '- Unicode' ],
-        see_if_its_a_number => [ 1,     '- See if its a number' ],
-        binary_filter       => [ 0,     '- Binary filter' ],
+        reset_cache         => [ 0,  '- New search' ],
+        unicode             => [ 1,  '- Unicode' ],
+        see_if_its_a_number => [ 1,  '- See if its a number' ],
+        binary_filter       => [ 0,  '- Binary filter' ],
     },
     mysql => {
-        default_user        => [ '',    '- Default user' ],
-        enable_utf8         => [ 1,     '- Enable utf8' ],
-        binary_filter       => [ 0,     '- Binary filter' ],
+        default_user        => [ '', '- Default user' ],
+        mysql_enable_utf8   => [ 1,  '- Enable utf8' ],
+        binary_filter       => [ 0,  '- Binary filter' ],
     },
     Pg => {
         default_user        => [ '', '- Default user' ],
@@ -137,11 +138,11 @@ $info->{option_sections} = [ qw( print sql menu dbs ) ];
 $info->{print}{keys}     = [ qw( tab_width min_col_width undef limit progress_bar ) ];
 $info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case ) ];
 $info->{dbs}{keys}       = [ qw( login db_defaults ) ];
-$info->{menu}{keys}      = [ qw( thsd_sep database_types operators sssc_mode expand keep_db_choice
+$info->{menu}{keys}      = [ qw( thsd_sep db_drivers operators sssc_mode expand keep_db_choice
                                  keep_schema_choice keep_table_choice table_expand mouse ) ];
 $info->{db_sections}     = [ qw( SQLite mysql Pg ) ];
 $info->{SQLite}{keys}    = [ qw( reset_cache unicode see_if_its_a_number binary_filter ) ];
-$info->{mysql}{keys}     = [ qw( default_user enable_utf8 binary_filter ) ];
+$info->{mysql}{keys}     = [ qw( default_user mysql_enable_utf8 binary_filter ) ];
 $info->{Pg}{keys}        = [ qw( default_user pg_enable_utf8 binary_filter ) ];
 
 $info->{sub_expand}{menu}     = [ qw( keep_db_choice keep_schema_choice keep_table_choice table_expand ) ];
@@ -170,25 +171,25 @@ $info->{ok} = '<OK>' if $opt->{menu}{sssc_mode}[v];
 my $sqlite_search = $opt->{SQLite}{reset_cache}[v] ? 1 : 0;
 
 
-DB_TYPES: while ( 1 ) {
+DB_DRIVER: while ( 1 ) {
 
     if ( $sqlite_search ) {
         $info->{db_driver} = 'SQLite';
         $sqlite_search = 0;
     }
     else {
-        if ( @{$opt->{menu}{database_types}[v]} == 1 ) {
+        if ( @{$opt->{menu}{db_drivers}[v]} == 1 ) {
             $info->{one_db_driver} = 1;
-            $info->{db_driver} = $opt->{menu}{database_types}[v][0];
+            $info->{db_driver} = $opt->{menu}{db_drivers}[v][0];
         }
         else {
             $info->{one_db_driver} = 0;
             # Choose
             $info->{db_driver} = choose(
-                [ undef, @{$opt->{menu}{database_types}[v]} ],
-                { prompt => 'Database Type: ', %{$info->{lyt_1}}, undef => 'Quit' }
+                [ undef, @{$opt->{menu}{db_drivers}[v]} ],
+                { prompt => 'Database Driver: ', %{$info->{lyt_1}}, undef => 'Quit' }
             );
-            last DB_TYPES if ! defined $info->{db_driver};
+            last DB_DRIVER if ! defined $info->{db_driver};
         }
     }
 
@@ -202,11 +203,11 @@ DB_TYPES: while ( 1 ) {
         say 'Available databases:';
         delete $info->{login}{$db_driver};
         print_error_message( $@ );
-        next DB_TYPES;
+        next DB_DRIVER;
     }
     if ( ! @$databases ) {
         print_error_message( "no $db_driver-databases found\n" );
-        next DB_TYPES;
+        next DB_DRIVER;
     }
     if ( $opt->{sql}{system_info}[v] ) {
         my $system_databases = system_databases( $db_driver );
@@ -228,14 +229,14 @@ DB_TYPES: while ( 1 ) {
         }
     }
 
-    my $new_db_settings = 0;
-    my $data = {};
     my %lyt_v_cs = ( %{$info->{lyt_3_cs}}, index => 1 );
+    my $data = {};
     my $old_idx_db = 0;
+    my $new_db_settings = 0;
+    my $db;
 
-    DATABASES: while ( 1 ) {
+    DATABASE: while ( 1 ) {
 
-        my $db;
         if ( $new_db_settings ) {
             $new_db_settings = 0;
         }
@@ -248,15 +249,16 @@ DB_TYPES: while ( 1 ) {
                 $choices,
                 { prompt => 'Choose Database' . $info->{cached}, default => $old_idx_db, %lyt_v_cs, undef => $back }
             );
+            $db = undef;
             $db = $choices->[$idx_db] if defined $idx_db;
             if ( ! defined $db ) {
-                last DB_TYPES if   $info->{one_db_driver};
-                next DB_TYPES if ! $info->{one_db_driver};
+                last DB_DRIVER if   $info->{one_db_driver};
+                next DB_DRIVER if ! $info->{one_db_driver};
             }
             if ( $opt->{menu}{keep_db_choice}[v] ) {
                 if ( $old_idx_db == $idx_db ) {
                     $old_idx_db = 0;
-                    next DATABASES;
+                    next DATABASE;
                 }
                 else {
                     $old_idx_db = $idx_db;
@@ -275,7 +277,7 @@ DB_TYPES: while ( 1 ) {
             delete $info->{login}{$db_driver}{$db};
             print_error_message( $@ );
             # remove database from @databases
-            next DATABASES;
+            next DATABASE;
         }
         my $old_idx_sch = 0;
 
@@ -310,7 +312,7 @@ DB_TYPES: while ( 1 ) {
                     { prompt => 'DB "'. basename( $db ) . '" - choose Schema:', default => $old_idx_sch, %lyt_v_cs }
                 );
                 $schema = $choices->[$idx_sch] if defined $idx_sch;
-                next DATABASES if ! defined $schema;
+                next DATABASE if ! defined $schema;
                 if ( $opt->{menu}{keep_schema_choice}[v] ) {
                     if ( $old_idx_sch == $idx_sch ) {
                         $old_idx_sch = 0;
@@ -331,7 +333,7 @@ DB_TYPES: while ( 1 ) {
             ) {
                 say 'Get table names:';
                 print_error_message( $@ );
-                next DATABASES;
+                next DATABASE;
             }
 
             my $join       = '  Join';
@@ -342,7 +344,7 @@ DB_TYPES: while ( 1 ) {
             push @tables, '  sqlite_master' if $db_driver eq 'SQLite' && $opt->{sql}{system_info}[v];
             my $old_idx_tbl = 0;
 
-            TABLES: while ( 1 ) {
+            TABLE: while ( 1 ) {
 
                 my $prompt = 'DB: "'. basename( $db );
                 $prompt .= '.' . $schema if defined $data->{$db}{schemas} && @{$data->{$db}{schemas}} > 1;
@@ -357,12 +359,12 @@ DB_TYPES: while ( 1 ) {
                 $table = $choices->[$idx_tbl] if defined $idx_tbl;
                 if ( ! defined $table ) {
                     next SCHEMA if defined $data->{$db}{schemas} && @{$data->{$db}{schemas}} > 1;
-                    next DATABASES;
+                    next DATABASE;
                 }
                 if ( $opt->{menu}{keep_table_choice}[v] ) {
                     if ( $old_idx_tbl == $idx_tbl ) {
                         $old_idx_tbl = 0;
-                        next TABLES;
+                        next TABLE;
                     }
                     else {
                         $old_idx_tbl = $idx_tbl;
@@ -377,8 +379,8 @@ DB_TYPES: while ( 1 ) {
                         say 'Database settings:';
                         print_error_message( $@ );
                     }
-                    next DATABASES if $new_db_settings;
-                    next TABLES;
+                    next DATABASE if $new_db_settings;
+                    next TABLE;
                 }
                 elsif ( $table eq $join ) {
                     if ( ! eval {
@@ -389,7 +391,7 @@ DB_TYPES: while ( 1 ) {
                         say 'Join tables:';
                         print_error_message( $@ );
                     }
-                    next TABLES if ! defined $multi_table;
+                    next TABLE if ! defined $multi_table;
                 }
                 elsif ( $table eq $union ) {
                     if ( ! eval {
@@ -400,7 +402,7 @@ DB_TYPES: while ( 1 ) {
                         say 'Union tables:';
                         print_error_message( $@ );
                     }
-                    next TABLES if ! defined $multi_table;
+                    next TABLE if ! defined $multi_table;
                 }
                 else {
                     $table =~ s/^[-\ ]\s//;
@@ -418,7 +420,7 @@ DB_TYPES: while ( 1 ) {
                     my $select_from_stmt = '';
                     if ( $multi_table ) {
                         $select_from_stmt = $multi_table->{quote}{stmt};
-                        for my $col ( keys %{$multi_table->{qt_columns}} ) {
+                        for my $col ( @{$multi_table->{pr_columns}} ) {
                             $qt_columns->{$col} = $multi_table->{qt_columns}{$col};
                             push @$pr_columns, $col;
                         }
@@ -505,7 +507,7 @@ sub union_tables {
             push @{$union->{used_tables}}, $union_table;
         }
 
-        UNION_COLUMNS: while ( 1 ) {
+        UNION_COLUMN: while ( 1 ) {
             my ( $all_cols, $privious_cols, $void ) = ( q['*'], q['^'], q[' '] );
             my @short_cuts = ( ( @{$union->{saved_cols}} ? $privious_cols : $void ), $all_cols );
             my $prompt = print_union_statement( $info, $union, 'Choose Column:' );
@@ -519,11 +521,11 @@ sub union_tables {
             if ( ! defined $col ) {
                 if ( defined $union->{used_cols}{$union_table} ) {
                     delete $union->{used_cols}{$union_table};
-                    next UNION_COLUMNS;
+                    next UNION_COLUMN;
                 }
                 else {
                     $union = clone( $backup_union );
-                    last UNION_COLUMNS;
+                    last UNION_COLUMN;
                 }
             }
             if ( $col eq $info->{ok} ) {
@@ -532,20 +534,20 @@ sub union_tables {
                     my $tbl = splice( @{$union->{used_tables}}, $idx, 1 );
                     push @{$union->{unused_tables}}, "- $tbl";
                 }
-                last UNION_COLUMNS;
+                last UNION_COLUMN;
             }
             if ( $col eq $void ) {
-                next UNION_COLUMNS;
+                next UNION_COLUMN;
             }
             if ( $col eq $privious_cols ) {
                 $union->{used_cols}{$union_table} = $union->{saved_cols};
-                next UNION_COLUMNS if $opt->{menu}{sssc_mode}[v];
-                last UNION_COLUMNS;
+                next UNION_COLUMN if $opt->{menu}{sssc_mode}[v];
+                last UNION_COLUMN;
             }
             if ( $col eq $all_cols ) {
                 @{$union->{used_cols}{$union_table}} = @{$ds->{col_names}{$union_table}};
-                next UNION_COLUMNS if $opt->{menu}{sssc_mode}[v];
-                last UNION_COLUMNS;
+                next UNION_COLUMN if $opt->{menu}{sssc_mode}[v];
+                last UNION_COLUMN;
             }
             else {
                 push @{$union->{used_cols}{$union_table}}, $col;
@@ -555,7 +557,8 @@ sub union_tables {
     }
     # column names in the result-set of a UNION are taken from the first query.
     my $first_table = $union->{used_tables}[0];
-    for my $col ( @{$union->{used_cols}{$first_table}} ) {
+    $union->{pr_columns} = $union->{used_cols}{$first_table};
+    for my $col ( @{$union->{pr_columns}} ) {
         $union->{qt_columns}{$col} = $dbh->quote_identifier( $col );
     }
     $union->{quote}{stmt} = "SELECT * FROM (";
@@ -682,7 +685,7 @@ sub join_tables {
         $join->{foreign_keys} = [];
         my $backup_master = clone( $join );
 
-        SLAVE_TABLES: while ( 1 ) {
+        JOIN: while ( 1 ) {
             my $enough_slaves = '  Enough TABLES';
             my $slave;
             my $backup_join = clone( $join );
@@ -703,11 +706,11 @@ sub join_tables {
                     }
                     else {
                         $join = clone( $backup_master );
-                        next SLAVE_TABLES;
+                        next JOIN;
                     }
                 }
                 elsif ( $slave eq $enough_slaves ) {
-                    last SLAVE_TABLES;
+                    last JOIN;
                 }
                 elsif ( $slave eq $info->{_info} ) {
                     if ( ! defined $ds->{tables_info} ) {
@@ -747,12 +750,12 @@ sub join_tables {
                 );
                 if ( ! defined $pk_col ) {
                     $join = clone( $backup_join );
-                    next SLAVE_TABLES;
+                    next JOIN;
                 }
                 if ( $pk_col eq $info->{_continue} ) {
                     if ( @{$join->{primary_keys}} == @{$backup_join->{primary_keys}} ) {
                         $join = clone( $backup_join );
-                        next SLAVE_TABLES;
+                        next JOIN;
                     }
                     last ON;
                 }
@@ -770,7 +773,7 @@ sub join_tables {
                 );
                 if ( ! defined $fk_col ) {
                     $join = clone( $backup_join );
-                    next SLAVE_TABLES;
+                    next JOIN;
                 }
                 $fk_col =~ s/^-\s//;
                 push @{$join->{foreign_keys}}, $avail_fk_cols{$fk_col};
@@ -788,6 +791,7 @@ sub join_tables {
         for my $col_pr ( @{$ds->{col_names}{$table}} ) {
             my $col_qt = $dbh->quote_identifier( undef, $table, $col_pr );
             next if any { $_ eq $col_qt } @{$join->{foreign_keys}};
+            push @{$join->{pr_columns}}, $col_pr;
             $join->{qt_columns}{$col_pr} = $col_qt;
             $col_stmt .= ', ' . $col_qt;
         }
@@ -976,7 +980,7 @@ sub read_table {
 
             AGGREGATE: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
-                my $choices = [ $info->{ok}, @{$info->{aggregate_functions}} ];
+                my $choices = [ $info->{ok}, @{$info->{avail_aggregate}} ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 # Choose
                 my $aggr = choose(
@@ -1044,9 +1048,11 @@ sub read_table {
                     $sql->{quote}{aggr_cols}[$i] .= $quote_col . ')';
                 }
                 $sql->{print}{aggr_cols}[$i] = unambiguous_key( $sql->{print}{aggr_cols}[$i], $pr_columns );
+                $sql->{quote}{aggr_cols}[$i] .= ' AS ' . $dbh->quote( $sql->{print}{aggr_cols}[$i] ); ###
                 my $print_aggr = $sql->{print}{aggr_cols}[$i];
                 my $quote_aggr = $sql->{quote}{aggr_cols}[$i];
-                $qt_columns->{$print_aggr} = $quote_aggr;
+                #$qt_columns->{$print_aggr} = $quote_aggr;
+                ( $qt_columns->{$print_aggr} = $quote_aggr ) =~ s/\sAS\s\S+//; ###
             }
         }
         elsif ( $custom eq $customize{'where'} ) {
@@ -1179,7 +1185,7 @@ sub read_table {
 
             HAVING: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
-                my $choices = [ $info->{ok}, @{$info->{aggregate_functions}}, map( '@' . $_, @{$sql->{print}{aggr_cols}} ) ];
+                my $choices = [ $info->{ok}, @{$info->{avail_aggregate}}, map( '@' . $_, @{$sql->{print}{aggr_cols}} ) ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 # Choose
                 my $aggr = choose(
@@ -1509,12 +1515,10 @@ sub read_table {
                 $select .= " LIMIT ?";
                 push @arguments, $opt->{print}{limit}[v];
             }
+            say 'Computing: ...';
             my $sth = $dbh->prepare( $select );
             $sth->execute( @arguments );
             my $col_names = $sth->{NAME};
-            if ( $info->{db_driver} eq 'SQLite' && $table eq 'union_tables' && @{$sql->{quote}{chosen_cols}} ) {
-                $col_names = [ map { s/^"([^"]+)"\z/$1/; $_ } @$col_names ]; #
-            }
             my $all_arrayref = $sth->fetchall_arrayref;
             unshift @$all_arrayref, $col_names;
             local $| = 1;
@@ -2063,13 +2067,13 @@ sub options {
             opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
         }
         elsif ( $option eq $opt->{"menu"}{'operators'}[chs] ) {
-            my $available = $info->{available_operators};
+            my $available = $info->{avail_operators};
             my ( $section, $key ) = ( 'menu', 'operators' );
             opt_choose_a_list( $info, $opt, $section, $key, $available );
         }
-        elsif ( $option eq $opt->{"menu"}{'database_types'}[chs] ) {
-            my $available = $info->{available_db_drivers};
-            my ( $section, $key ) = ( 'menu', 'database_types' );
+        elsif ( $option eq $opt->{"menu"}{'db_drivers'}[chs] ) {
+            my $available = $info->{avail_db_drivers};
+            my ( $section, $key ) = ( 'menu', 'db_drivers' );
             opt_choose_a_list( $info, $opt, $section, $key, $available );
         }
         elsif ( $option eq $opt->{"menu"}{'mouse'}[chs] ) {
@@ -2220,7 +2224,7 @@ sub database_setting {
     if ( ! defined $db ) {
         # Choose
         $db_driver = choose(
-            [ undef, @{$opt->{menu}{database_types}[v]} ],
+            [ undef, @{$opt->{menu}{db_drivers}[v]} ],
             { %{$info->{lyt_1}} }
         );
         return if ! defined $db_driver;
@@ -2290,8 +2294,8 @@ sub database_setting {
             else { die $option }
         }
         elsif ( $db_driver eq 'mysql' ) {
-            if ( $option eq $opt->{"mysql"}{enable_utf8}[chs] ) {
-                my ( $key, $prompt ) = ( 'enable_utf8', 'Enable utf8' );
+            if ( $option eq $opt->{"mysql"}{mysql_enable_utf8}[chs] ) {
+                my ( $key, $prompt ) = ( 'mysql_enable_utf8', 'Enable utf8' );
                 opt_yes_no( $info, $opt, $section, $key, $prompt );
             }
             elsif ( $option eq $opt->{"mysql"}{default_user}[chs] ) {
@@ -2632,7 +2636,7 @@ sub get_db_handle {
         $db_opt{sqlite_see_if_its_a_number} = $opt->{$db_key}{see_if_its_a_number}[v] // $opt->{SQLite}{see_if_its_a_number}[v];
     }
     elsif ( $db_driver eq 'mysql' ) {
-        $db_opt{mysql_enable_utf8} = $opt->{$db_key}{enable_utf8}[v] // $opt->{mysql}{enable_utf8}[v];
+        $db_opt{mysql_enable_utf8} = $opt->{$db_key}{mysql_enable_utf8}[v] // $opt->{mysql}{mysql_enable_utf8}[v];
     }
     elsif ( $db_driver eq 'Pg' ) {
         $db_opt{pg_enable_utf8} = $opt->{$db_key}{pg_enable_utf8}[v] // $opt->{Pg}{pg_enable_utf8}[v];
@@ -2718,9 +2722,7 @@ sub available_databases {
         my $stmt;
         if ( ! $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT schema_name FROM information_schema.schemata
-                        WHERE schema_name != 'mysql'
-                          AND schema_name != 'information_schema'
-                          AND schema_name != 'performance_schema'
+                        WHERE schema_name != 'mysql' AND schema_name != 'information_schema' AND schema_name != 'performance_schema'
                         ORDER BY schema_name";
         }
         elsif ( $opt->{sql}{system_info}[v] ) {
@@ -2763,8 +2765,7 @@ sub get_schema_names {
         my $stmt;
         if ( ! $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT schema_name FROM information_schema.schemata
-                        WHERE schema_name != 'information_schema'
-                          AND schema_name !~ '^pg_'
+                        WHERE schema_name != 'information_schema'AND schema_name !~ '^pg_'
                         ORDER BY schema_name";
         }
         elsif ( $opt->{sql}{system_info}[v] ) {
@@ -2868,9 +2869,7 @@ sub primary_and_foreign_keys {
             my $stmt = "SELECT constraint_name, table_name, column_name, referenced_table_name,
                                referenced_column_name, position_in_unique_constraint
                            FROM information_schema.key_column_usage
-                           WHERE table_schema = ?
-                             AND table_name = ?
-                             AND referenced_table_name IS NOT NULL";
+                           WHERE table_schema = ? AND table_name = ? AND referenced_table_name IS NOT NULL";
             my $sth = $dbh->prepare( $stmt );
             $sth->execute( $schema, $table );
             while ( my $row = $sth->fetchrow_hashref ) {
@@ -2883,7 +2882,8 @@ sub primary_and_foreign_keys {
                 }
             }
         }
-        elsif ( $info->{db_driver} eq 'Pg' ) {
+        #elsif ( $info->{db_driver} eq 'Pg' ) {
+        else {
             my $sth = $dbh->foreign_key_info( undef, undef, undef, undef, $schema, $table );
             if ( defined $sth ) {
                 while ( my $row = $sth->fetchrow_hashref ) {
@@ -3009,7 +3009,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.004
+Version 0.005
 
 =cut
 
@@ -3039,7 +3039,7 @@ To be able to browse database-, schema- and table-lists and the content of table
 
 The C<db-browser> expects an C<UTF-8> environment.
 
-The configuration file and the file with the cached search results for SQLite databases are located in the I<$HOME/.db_browser_conf> directory.
+The configuration file and the file with the cached search results for C<SQLite> databases are located in the I<$HOME/.db_browser_conf> directory.
 
 =head1 USAGE
 
@@ -3068,6 +3068,8 @@ the C<Home> key (or C<Ctrl-A>) to jump to the beginning of the menu, the C<End> 
 the C<Enter/Return> key to confirm a chosen menu item.
 
 =back
+
+With the option I<mouse mode> enabled it can be used the mouse with the left mouse key to navigate through the menus instead of the keyboard keys.
 
 The C<q> key goes back (C<Ctrl-D> instead of C<q> if prompted for a string) in the menu hierarchy.
 
@@ -3121,7 +3123,7 @@ Set the behavior of different menus.
 
 For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Expand> to "Enchanted" means: save the menu position.
 
-For "Print Table" "Enchanted" means: enable printing the chosen row.
+For "Print Table" "Enchanted" means: enable printing the chosen table row.
 
 =head3 Mouse mode
 
@@ -3163,11 +3165,17 @@ Set Database defaults:
 
 If set the I<default user> is used as username for database logins.
 
+=head3 See if it's a number
+
+If set to C<YES> C<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are numbers.
+
+See L<DBD::SQLite> for details. This is a C<SQLite>-only option.
+
 =head4 Enable utf8
 
 If enabled the C<utf8> flag will be turned on for character data coming from the database.
 
-For a more detailed explanation see the documentation of the respective Perl C<DBI> driver.
+For a more driver specific explanation see the documentation of the respective Perl C<DBI> driver.
 
 =head4 "Binary filter"
 
