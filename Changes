@@ -1,6 +1,11 @@
 Revision history for App-DBBrowser
 
 
+0.006   2014-01-07
+        - Bugfix: reset cached data if db settings have changed.
+        - Code refactoring and update - e.g. move db-specific code in the db-section; add "WHERE 1 = 0" to the "SELECT" query where only the column names are needed.
+        - Improved documentation.
+
 0.005   2014-01-06
         - Bugfix.
         - Code update and refactoring.

@@ -4,7 +4,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.005';
+our $VERSION = '0.006';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -41,7 +41,10 @@ use constant {
     chs => 1,
 };
 
+
 my $home = File::HomeDir->my_home();
+#my $my_data = File::HomeDir->my_data();
+
 my $config_dir = '.db_browser_conf';
 
 if ( $home ) {
@@ -217,15 +220,15 @@ DB_DRIVER: while ( 1 ) {
             push @system, splice( @$databases, $i, 1 );
         }
         if ( $db_driver eq 'SQLite' ) {
-            @$databases = ( @$databases, @system );
+            push @$databases, @system;
         }
         else {
-            @$databases = ( map( "- $_", @$databases ), map( "  $_", @system ) );
+            $databases = [ map( "- $_", @$databases ), map( "  $_", @system ) ];
         }
     }
     else {
         if ( $db_driver ne 'SQLite' ) {
-            @$databases = map{ "- $_" } @$databases;
+            $databases = [ map{ "- $_" } @$databases ];
         }
     }
 
@@ -239,9 +242,9 @@ DB_DRIVER: while ( 1 ) {
 
         if ( $new_db_settings ) {
             $new_db_settings = 0;
+            $data = {};
         }
         else {
-            # $data = {};
             my $back = ( $db_driver eq 'SQLite' ? '' : ' ' x 2 ) . ( $info->{one_db_driver} ? 'Quit' : 'BACK' );
             my $choices = [ undef, @$databases ];
             # Choose
@@ -290,11 +293,13 @@ DB_DRIVER: while ( 1 ) {
             elsif ( @{$data->{$db}{schemas}} > 1 ) {
                 my $choices;
                 my $idx_sch;
-                if ( $opt->{sql}{system_info}[v] && $db_driver eq 'Pg' ) {
+                my $regexp_system_schemas;
+                $regexp_system_schemas = regexp_system_schemas( $db_driver ) if $opt->{sql}{system_info}[v];
+                if ( defined $regexp_system_schemas ) {
                     my @system;
                     my @normal;
                     for my $schema ( @{$data->{$db}{schemas}} ) {
-                        if ( $schema =~ /^pg_/ || $schema eq 'information_schema' ) {
+                        if ( $schema =~ $regexp_system_schemas ) {
                             push @system, $schema;
                         }
                         else {
@@ -327,7 +332,7 @@ DB_DRIVER: while ( 1 ) {
 
             if ( ! eval {
                 if ( ! defined $data->{$db}{$schema}{tables} ) {
-                    $data->{$db}{$schema}{tables} = get_table_names( $dbh, $db, $schema );
+                    $data->{$db}{$schema}{tables} = get_table_names( $info, $opt, $dbh, $db, $schema );
                 }
                 1 }
             ) {
@@ -340,8 +345,23 @@ DB_DRIVER: while ( 1 ) {
             my $union      = '  Union';
             my $db_setting = '  Database settings';
             my @tables = ();
-            push @tables, map { "- $_" } @{$data->{$db}{$schema}{tables}};
-            push @tables, '  sqlite_master' if $db_driver eq 'SQLite' && $opt->{sql}{system_info}[v];
+            my $regexp_system_tables;
+            $regexp_system_tables = regexp_system_tables( $db_driver ) if $opt->{sql}{system_info}[v];
+            if ( defined $regexp_system_tables ) {
+                my @system;
+                for my $table ( @{$data->{$db}{$schema}{tables}} ) {
+                    if ( $table =~ $regexp_system_tables ) {
+                        push @system, $table;
+                    }
+                    else {
+                        push @tables, $table;
+                    }
+                }
+                @tables = ( map( "- $_", @tables ), map( "  $_", @system ) );
+            }
+            else {
+                @tables = map { "- $_" } @{$data->{$db}{$schema}{tables}};
+            }
             my $old_idx_tbl = 0;
 
             TABLE: while ( 1 ) {
@@ -427,7 +447,7 @@ DB_DRIVER: while ( 1 ) {
                     }
                     else {
                         $select_from_stmt = "SELECT * FROM " . $dbh->quote_identifier( undef, $schema, $table );
-                        my $sth = $dbh->prepare( $select_from_stmt );
+                        my $sth = $dbh->prepare( $select_from_stmt . " WHERE 1 = 0" );
                         $sth->execute();
                         for my $col ( @{$sth->{NAME}} ) {
                             $qt_columns->{$col} = $dbh->quote_identifier( $col );
@@ -1048,11 +1068,10 @@ sub read_table {
                     $sql->{quote}{aggr_cols}[$i] .= $quote_col . ')';
                 }
                 $sql->{print}{aggr_cols}[$i] = unambiguous_key( $sql->{print}{aggr_cols}[$i], $pr_columns );
-                $sql->{quote}{aggr_cols}[$i] .= ' AS ' . $dbh->quote( $sql->{print}{aggr_cols}[$i] ); ###
+                $sql->{quote}{aggr_cols}[$i] .= ' AS ' . $dbh->quote( $sql->{print}{aggr_cols}[$i] );
                 my $print_aggr = $sql->{print}{aggr_cols}[$i];
                 my $quote_aggr = $sql->{quote}{aggr_cols}[$i];
-                #$qt_columns->{$print_aggr} = $quote_aggr;
-                ( $qt_columns->{$print_aggr} = $quote_aggr ) =~ s/\sAS\s\S+//; ###
+                ( $qt_columns->{$print_aggr} = $quote_aggr ) =~ s/\sAS\s\S+//;
             }
         }
         elsif ( $custom eq $customize{'where'} ) {
@@ -2751,6 +2770,13 @@ sub available_databases {
     return $databases;
 }
 
+sub system_databases {
+    my ( $db_driver ) = @_;
+    return [ qw( mysql information_schema performance_schema ) ] if $db_driver eq 'mysql';
+    return [ qw( postgres template0 template1 ) ]                if $db_driver eq 'Pg';
+    return;
+}
+
 
 sub get_schema_names {
     my ( $info, $opt, $dbh, $db ) = @_;
@@ -2763,13 +2789,13 @@ sub get_schema_names {
     elsif ( $info->{db_driver} eq 'Pg' ) {
         # Schema names beginning with pg_ are reserved for system purposes and cannot be created by users.
         my $stmt;
-        if ( ! $opt->{sql}{system_info}[v] ) {
+        if ( $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT schema_name FROM information_schema.schemata
-                        WHERE schema_name != 'information_schema'AND schema_name !~ '^pg_'
                         ORDER BY schema_name";
         }
-        elsif ( $opt->{sql}{system_info}[v] ) {
+        else {
             $stmt = "SELECT schema_name FROM information_schema.schemata
+                        WHERE schema_name != 'information_schema'AND schema_name !~ '^pg_'
                         ORDER BY schema_name";
         }
         my $schemas = $dbh->selectcol_arrayref( $stmt, {} );
@@ -2780,15 +2806,30 @@ sub get_schema_names {
     }
 }
 
+sub regexp_system_schemas {
+    my ( $db_driver ) = @_;
+    return qr/^(?:pg_|information_schema\z)/ if $db_driver eq 'Pg';
+    return;
+}
+
 
 sub get_table_names {
-    my ( $dbh, $db, $schema ) = @_;
-    my $tables = [];
+    my ( $info, $opt, $dbh, $db, $schema ) = @_;
+    my $tables   = [];
     if ( $info->{db_driver} eq 'SQLite' ) {
-        my $stmt = "SELECT name FROM sqlite_master
-                       WHERE type = 'table'
-                       ORDER BY name";
-        $tables = $dbh->selectcol_arrayref( $stmt );
+        if ( $opt->{sql}{system_info}[v] ) {
+            my $stmt = "SELECT name FROM sqlite_master
+                           WHERE type = 'table'
+                           ORDER BY name";
+            $tables = $dbh->selectcol_arrayref( $stmt );
+            push @$tables, 'sqlite_master';
+        }
+        else {
+            my $stmt = "SELECT name FROM sqlite_master
+                           WHERE type = 'table' AND name NOT REGEXP '^sqlite'
+                           ORDER BY name";
+            $tables = $dbh->selectcol_arrayref( $stmt );
+        }
     }
     else {
         my $stmt = "SELECT table_name FROM information_schema.tables
@@ -2800,17 +2841,10 @@ sub get_table_names {
     return $tables;
 }
 
-
-sub system_databases {
+sub regexp_system_tables {
     my ( $db_driver ) = @_;
-    my $system_databases;
-    if ( $db_driver eq 'mysql' ) {
-        $system_databases = [ qw( mysql information_schema performance_schema ) ];
-    }
-    elsif ( $db_driver eq 'Pg' ) {
-        $system_databases = [ qw( postgres template0 template1 ) ];
-    }
-    return $system_databases;
+    return qr/^sqlite/i if $db_driver eq 'SQLite';
+    return;
 }
 
 
@@ -3009,7 +3043,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.005
+Version 0.006
 
 =cut
 
@@ -3089,7 +3123,7 @@ Set the width the columns should have at least when printed.
 
 =head3 Undef
 
-Set the string that will be shown on the screen if a table value is undefined.
+Set the string that will be shown on the screen instead of an undefined field.
 
 =head3 Rows
 
@@ -3097,7 +3131,7 @@ Set the maximum number of fetched table rows. This can be overwritten by setting
 
 =head3 ProgressBar
 
-Set the progress bar threshold. The threshold refers to the list size (rows x columns).
+Set the progress bar threshold. If the number of fields (rows x columns) is higher than the threshold a progress bar is shown while preparing the data for the output.
 
 =head3 DB drivers
 
@@ -3165,9 +3199,9 @@ Set Database defaults:
 
 If set the I<default user> is used as username for database logins.
 
-=head3 See if it's a number
+=head4 See if it's a number
 
-If set to C<YES> C<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are numbers.
+If set to C<YES> L<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are numbers.
 
 See L<DBD::SQLite> for details. This is a C<SQLite>-only option.
 
