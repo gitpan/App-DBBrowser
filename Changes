@@ -1,6 +1,14 @@
 Revision history for App-DBBrowser
 
 
+0.007   2014-01-11
+        - Bugfixed undefined "sqlite_master" primary and foreign keys by replacing in "primary_and_foreign_keys" the parsing of "sqlite_master" with "pragma foreign_key_list(table)".
+        - Bugfix: regexp for SQLite systemtables from "/sqlite/i" to "/sqlite_/i".
+        - Changed application directory: from "$HOME/.db_browser_conf" to "File::HomeDir->my_data/db_browser_conf".
+        - Added option "Path" which shows the path of the "db-browser" and the application directory.
+        - Code update of limit "Max Rows".
+        - Updated documentation.
+
 0.006   2014-01-07
         - Bugfix: reset cached data if db settings have changed.
         - Code refactoring and update - e.g. move db-specific code in the db-section; add "WHERE 1 = 0" to the "SELECT" query where only the column names are needed.

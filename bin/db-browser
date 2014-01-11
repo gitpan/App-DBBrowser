@@ -4,12 +4,12 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.006';
+our $VERSION = '0.007';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
 use File::Find            qw(find);
-use File::Spec::Functions qw(catfile catdir);
+use File::Spec::Functions qw(catfile catdir rel2abs);
 use Getopt::Long          qw(GetOptions);
 use List::Util            qw(sum);
 use Pod::Usage            qw(pod2usage);
@@ -28,6 +28,7 @@ use Unicode::GCString qw();
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
+# ToDo (...l...)
 
 END { ReadMode 0 }
 
@@ -43,23 +44,20 @@ use constant {
 
 
 my $home = File::HomeDir->my_home();
-#my $my_data = File::HomeDir->my_data();
-
-my $config_dir = '.db_browser_conf';
-
-if ( $home ) {
-    $config_dir = catdir( $home, $config_dir );
-    mkdir $config_dir or die $! if ! -d $config_dir;
-}
-else {
-    say "Could not find the home directory!";
+if ( ! $home ) {
+    say "'File::HomeDir->my_home()' could not find the home directory!";
+    say "A home directory is needed to be able to use 'db-browser'";
     exit;
 }
+my $my_data = File::HomeDir->my_data();
+my $app_dir = $my_data ? catdir( $my_data, 'db_browser_conf' ) : catdir( $home, '.db_browser_conf' );
+mkdir $app_dir or die $! if ! -d $app_dir;
 
 my $info = {
     home              => $home,
-    config_file       => catfile( $config_dir, 'config.json' ),
-    db_cache_file     => catfile( $config_dir, 'cache_db_search.json' ),
+    app_dir           => $app_dir,
+    config_file       => catfile( $app_dir, 'config.json' ),
+    db_cache_file     => catfile( $app_dir, 'cache_db_search.json' ),
     lyt_stmt          => { layout => 1, order => 0, justify => 2, clear_screen => 1, undef => '<<', lf => [0,4]  },
     lyt_1             => { layout => 1, order => 0, justify => 2, clear_screen => 0, undef => '<<' },
     lyt_stop          => { layout => 0, order => 1, justify => 0, clear_screen => 0 },
@@ -95,20 +93,20 @@ my $opt = {
         tab_width      => [ 2,       '- Tabwidth' ],
         min_col_width  => [ 30,      '- Colwidth' ],
         undef          => [ '',      '- Undef' ],
-        limit          => [ 100_000, '- Rows' ],
+        limit          => [ 50_000,  '- Max Rows' ],
         progress_bar   => [ 20_000,  '- ProgressBar' ],
     },
     sql => {
         lock_stmt      => [ 0, '- Lock' ],
         system_info    => [ 0, '- Metadata' ],
-        regexp_case    => [ 0, '- Regexp case' ],
+        regexp_case    => [ 0, '- Regexp Case' ],
     },
     menu => {
         thsd_sep       => [ ',',           '- Separator' ],
-        db_drivers     => [ $my_db_drivers,'- DB drivers' ],
+        db_drivers     => [ $my_db_drivers,'- DB Drivers' ],
         operators      => [ $my_operators, '- Operators' ],
-        sssc_mode      => [ 0,             '- Sssc mode' ],
-        mouse          => [ 0,             '- Mouse mode' ],
+        sssc_mode      => [ 0,             '- Sssc Mode' ],
+        mouse          => [ 0,             '- Mouse Mode' ],
         expand         => [ 1,             '- Expand' ],
           keep_db_choice     => [ 0, '- Choose Database' ],
           keep_schema_choice => [ 0, '- Choose Schema' ],
@@ -116,24 +114,24 @@ my $opt = {
           table_expand       => [ 1, '- Print  Table' ],
     },
     dbs => {
-        login               => [ 0,       '- DB login' ],
-        db_defaults         => [ 'Dummy', '- DB defaults' ],
+        login               => [ 0,       '- DB Login' ],
+        db_defaults         => [ 'Dummy', '- DB Defaults' ],
     },
     SQLite => {
-        reset_cache         => [ 0,  '- New search' ],
+        reset_cache         => [ 0,  '- New Search' ],
         unicode             => [ 1,  '- Unicode' ],
         see_if_its_a_number => [ 1,  '- See if its a number' ],
-        binary_filter       => [ 0,  '- Binary filter' ],
+        binary_filter       => [ 0,  '- Binary Filter' ],
     },
     mysql => {
-        default_user        => [ '', '- Default user' ],
+        default_user        => [ '', '- Default User' ],
         mysql_enable_utf8   => [ 1,  '- Enable utf8' ],
-        binary_filter       => [ 0,  '- Binary filter' ],
+        binary_filter       => [ 0,  '- Binary Filter' ],
     },
     Pg => {
-        default_user        => [ '', '- Default user' ],
+        default_user        => [ '', '- Default User' ],
         pg_enable_utf8      => [ 1,  '- Enable utf8' ],
-        binary_filter       => [ 0,  '- Binary filter' ],
+        binary_filter       => [ 0,  '- Binary Filter' ],
     }
 };
 
@@ -454,12 +452,6 @@ DB_DRIVER: while ( 1 ) {
                             push @$pr_columns, $col;
                         }
                     }
-                    $info->{set_limit} = 0;
-                    if ( defined $opt->{print}{limit}[v] ) {
-                        my $statement = "SELECT COUNT(*) FROM ( " . $select_from_stmt . " LIMIT ? ) AS limit_part";
-                        my ( $rows ) = $dbh->selectrow_array( $statement, undef, $opt->{print}{limit}[v] );
-                        $info->{set_limit} = 1 if $rows == $opt->{print}{limit}[v];
-                    }
 
                     PRINT_TABLE: while ( 1 ) {
                         my ( $all_arrayref ) = read_table( $info, $opt, $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns );
@@ -482,12 +474,12 @@ DB_DRIVER: while ( 1 ) {
 
 sub union_tables {
     my ( $info, $dbh, $db, $schema, $data ) = @_;
-    my $ds = $data->{$db}{$schema};
-    if ( ! defined $ds->{col_names} || ! defined $ds->{col_types} ) {
+    my $u = $data->{$db}{$schema};
+    if ( ! defined $u->{col_names} || ! defined $u->{col_types} ) {
         $data = column_names_and_types( $info, $dbh, $db, $schema, $data );
     }
     my $union = {
-        unused_tables => [ map { "- $_" } @{$ds->{tables}} ],
+        unused_tables => [ map { "- $_" } @{$u->{tables}} ],
         used_tables   => [],
         used_cols     => {},
         saved_cols    => [],
@@ -505,10 +497,10 @@ sub union_tables {
             return;
         }
         elsif ( $union_table eq $info->{_info} ) {
-            if ( ! defined $ds->{tables_info} ) {
-                $ds->{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
+            if ( ! defined $u->{tables_info} ) {
+                $u->{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
             }
-            my $tbls_info = print_tables_info( $ds );
+            my $tbls_info = print_tables_info( $u );
             choose( $tbls_info, { prompt => '', %{$info->{lyt_3_cs}} } );
             next UNION_TABLE;
         }
@@ -531,7 +523,7 @@ sub union_tables {
             my ( $all_cols, $privious_cols, $void ) = ( q['*'], q['^'], q[' '] );
             my @short_cuts = ( ( @{$union->{saved_cols}} ? $privious_cols : $void ), $all_cols );
             my $prompt = print_union_statement( $info, $union, 'Choose Column:' );
-            my $choices = [ $info->{ok}, @short_cuts, @{$ds->{col_names}{$union_table}} ];
+            my $choices = [ $info->{ok}, @short_cuts, @{$u->{col_names}{$union_table}} ];
             unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
             # Choose
             my $col = choose(
@@ -565,7 +557,7 @@ sub union_tables {
                 last UNION_COLUMN;
             }
             if ( $col eq $all_cols ) {
-                @{$union->{used_cols}{$union_table}} = @{$ds->{col_names}{$union_table}};
+                @{$union->{used_cols}{$union_table}} = @{$u->{col_names}{$union_table}};
                 next UNION_COLUMN if $opt->{menu}{sssc_mode}[v];
                 last UNION_COLUMN;
             }
@@ -646,15 +638,15 @@ sub get_tables_info {
 
 
 sub print_tables_info {
-    my ( $ds ) = @_;
+    my ( $ref ) = @_;
     my $len_key = 10;
     my $col_max = ( GetTerminalSize )[0] - $len_key;
     my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
     $line_fold->config( 'ColMax', $col_max > 140 ? 140 : $col_max );
     my $ch_info = [ 'Close with ENTER' ];
-    for my $table ( @{$ds->{tables}} ) {
+    for my $table ( @{$ref->{tables}} ) {
         push @{$ch_info}, " ";
-        for my $line ( @{$ds->{tables_info}{$table}} ) {
+        for my $line ( @{$ref->{tables_info}{$table}} ) {
             my $text = sprintf "%*s%s", $len_key, @$line;
             $text = $line_fold->fold( '' , ' ' x $len_key, $text );
             push @{$ch_info}, split /\R+/, $text;
@@ -669,11 +661,11 @@ sub join_tables {
     my $join = {};
     $join->{quote}{stmt} = "SELECT * FROM";
     $join->{print}{stmt} = "SELECT * FROM";
-    my $ds = $data->{$db}{$schema};
-    if ( ! defined $ds->{col_names} || ! defined $ds->{col_types} ) {
+    my $j = $data->{$db}{$schema};
+    if ( ! defined $j->{col_names} || ! defined $j->{col_types} ) {
         $data = column_names_and_types( $info, $dbh, $db, $schema, $data );
     }
-    my @tables = map { "- $_" } @{$ds->{tables}};
+    my @tables = map { "- $_" } @{$j->{tables}};
 
     MASTER: while ( 1 ) {
         my $prompt = print_join_statement( $info, $join->{print}{stmt}, 'Choose MASTER table:' );
@@ -686,10 +678,10 @@ sub join_tables {
             return;
         }
         if ( $master eq $info->{_info} ) {
-            if ( ! defined $ds->{tables_info} ) {
-                $ds->{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
+            if ( ! defined $j->{tables_info} ) {
+                $j->{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
             }
-            my $tbls_info = print_tables_info( $ds );
+            my $tbls_info = print_tables_info( $j );
             # Choose
             choose( $tbls_info, { prompt => '', %{$info->{lyt_3_cs}} } );
             next MASTER;
@@ -719,7 +711,7 @@ sub join_tables {
                 );
                 if ( ! defined $slave ) {
                     if ( @{$join->{used_tables}} == 1 ) {
-                        @tables = map { "- $_" } @{$ds->{tables}};
+                        @tables = map { "- $_" } @{$j->{tables}};
                         $join->{quote}{stmt} = "SELECT * FROM";
                         $join->{print}{stmt} = "SELECT * FROM";
                         next MASTER;
@@ -733,10 +725,10 @@ sub join_tables {
                     last JOIN;
                 }
                 elsif ( $slave eq $info->{_info} ) {
-                    if ( ! defined $ds->{tables_info} ) {
-                        $ds->{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
+                    if ( ! defined $j->{tables_info} ) {
+                        $j->{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
                     }
-                    my $tbls_info = print_tables_info( $ds );
+                    my $tbls_info = print_tables_info( $j );
                     choose( $tbls_info, { prompt => '', %{$info->{lyt_3_cs}} } );
                     next SLAVE;
                 }
@@ -751,12 +743,12 @@ sub join_tables {
             $join->{print}{stmt} .= " LEFT OUTER JOIN " .                                         $slave   . " ON";
             my %avail_pk_cols = ();
             for my $used_table ( @{$join->{used_tables}} ) {
-                for my $col ( @{$ds->{col_names}{$used_table}} ) {
+                for my $col ( @{$j->{col_names}{$used_table}} ) {
                     $avail_pk_cols{ $used_table . '.' . $col } = $dbh->quote_identifier( undef, $used_table, $col );
                 }
             }
             my %avail_fk_cols = ();
-            for my $col ( @{$ds->{col_names}{$slave}} ) {
+            for my $col ( @{$j->{col_names}{$slave}} ) {
                 $avail_fk_cols{ $slave . '.' . $col } = $dbh->quote_identifier( undef, $slave, $col );
             }
             my $AND = '';
@@ -805,12 +797,27 @@ sub join_tables {
         }
         last MASTER;
     }
+
+    #my @not_unique_col;
+    #my %seen;
+    #for my $table (@{$join->{used_tables}} ) {
+    #    for my $col ( @{$j->{col_names}{$table}} ) {
+    #        $seen{$col}++;
+    #        push @not_unique_col, $col if $seen{$col} == 2;
+    #    }
+    #}
     my $col_stmt = '';
-    my %seen;
     for my $table ( @{$join->{used_tables}} ) {
-        for my $col_pr ( @{$ds->{col_names}{$table}} ) {
-            my $col_qt = $dbh->quote_identifier( undef, $table, $col_pr );
-            next if any { $_ eq $col_qt } @{$join->{foreign_keys}};
+        for my $col ( @{$j->{col_names}{$table}} ) {
+            my $col_qt = $dbh->quote_identifier( undef, $table, $col );
+            my $col_pr = $col;
+            if ( any { $_ eq $col_qt } @{$join->{foreign_keys}} ) {
+                next;
+            }
+            #if ( any { $_ eq $col_pr } @not_unique_col ) {
+                $col_pr .= '_' . $table;
+                $col_qt .= " AS " . $col_pr;
+            #}
             push @{$join->{pr_columns}}, $col_pr;
             $join->{qt_columns}{$col_pr} = $col_qt;
             $col_stmt .= ', ' . $col_qt;
@@ -892,11 +899,6 @@ sub read_table {
     my ( $DISTINCT, $ALL, $ASC, $DESC, $AND, $OR ) = ( "DISTINCT", "ALL", "ASC", "DESC", "AND", "OR" );
     if ( $info->{lock} == 0 ) {
         reset_sql( $sql, $qt_columns );
-    }
-    my $auto_limit = '';
-    if ( $info->{set_limit} && ! $sql->{print}{limit_stmt} ) {
-        $auto_limit = " LIMIT " . insert_sep( $opt->{print}{limit}[v], $opt->{menu}{thsd_sep}[v] );
-        $sql->{print}{limit_stmt} = $auto_limit;
     }
 
     CUSTOMIZE: while ( 1 ) {
@@ -1403,7 +1405,7 @@ sub read_table {
                 if ( $choice eq $info->{ok} ) {
                     if ( ! @{$sql->{quote}{limit_args}} ) {
                         $sql->{quote}{limit_stmt} = '';
-                        $sql->{print}{limit_stmt} = $auto_limit;
+                        $sql->{quote}{limit_stmt} = '';
                     }
                     last LIMIT;
                 }
@@ -1530,9 +1532,11 @@ sub read_table {
             $select .= $sql->{quote}{order_by_stmt};
             $select .= $sql->{quote}{limit_stmt};
             my @arguments = ( @{$sql->{quote}{where_args}}, @{$sql->{quote}{having_args}}, @{$sql->{quote}{limit_args}} );
-            if ( ! $sql->{quote}{limit_stmt} && $info->{set_limit} ) {
+            $info->{auto_limit} = 0;
+            if ( ! $sql->{quote}{limit_stmt} && defined $opt->{print}{limit}[v] ) {
                 $select .= " LIMIT ?";
                 push @arguments, $opt->{print}{limit}[v];
+                $info->{auto_limit} = 1;
             }
             say 'Computing: ...';
             my $sth = $dbh->prepare( $select );
@@ -1810,8 +1814,10 @@ sub calc_avail_width {
         my $minimum_with = $opt->{print}{min_col_width}[v] || 1;
         if ( @$width_head > $avail_width ) {
             say 'Terminal window is not wide enough to print this table.';
-            choose( [ 'Press ENTER to show the column names' ], { prompt => '', %{$info->{lyt_stop}} } );
-            choose( $a_ref->[0], { prompt => 'Column names (close with ENTER):', %{$info->{lyt_stop}} } );
+            choose( [ 'Press ENTER to show the column names.' ], { prompt => '', %{$info->{lyt_stop}} } );
+            my $prompt = 'To reduce the number of columns choose "- COLUMNS".' . "\n";
+            $prompt .= 'Close with ENTER.';
+            choose( $a_ref->[0], { prompt => $prompt, %{$info->{lyt_stop}} } );
             return;
         }
         my @width_cols_tmp = @$width_cols;
@@ -1910,8 +1916,19 @@ sub func_print_tbl {
     ( $width_head, $width_cols ) = calc_avail_width( $info, $opt, $a_ref, $term_width, $width_head, $width_cols );
     return if ! $width_head || ! $width_cols;
     my ( $list, $len ) = trunk_col_to_avail_width( $info, $opt, $a_ref, $width_cols, $not_a_number, $show_progress );
-    my $limit = 100_000;
-    $limit = $opt->{print}{limit}[v] + 1 if defined $opt->{print}{limit}[v] && $opt->{print}{limit}[v] + 1 > $limit;
+    my $max_rows = $opt->{print}{limit}[v] // @$list;
+    if ( $info->{auto_limit} && @$list > $max_rows ) {
+        my $reached_limit = 'REACHED LIMIT MAX_ROWS: ' . insert_sep( $max_rows, $opt->{menu}{thsd_sep}[v] ) . '';
+        my $gcs = Unicode::GCString->new( $reached_limit );
+        if ( $gcs->columns > $term_width ) {
+            $reached_limit = unicode_sprintf( $term_width, 'REACHED LIMIT', 0 );
+        }
+        push @$list, $reached_limit;
+        $max_rows++;
+    }
+    $max_rows++;
+    my $limit_choose = 100_000;
+    $limit_choose = $max_rows if $max_rows > $limit_choose;
 
     if ( $opt->{menu}{table_expand}[v] ) {
         my $length_key = 0;
@@ -1940,7 +1957,7 @@ sub func_print_tbl {
             my $row = choose(
                 $list,
                 { prompt => '', %{$info->{lyt_3_cs}}, index => 1, default => $old_row,
-                  limit => $limit, ll => $len }
+                  limit => $limit_choose, ll => $len }
             );
             return if ! defined $row;
             return if $row == 0;
@@ -1963,7 +1980,7 @@ sub func_print_tbl {
                     push @{$row_data}, sprintf "%*.*s%*s%s", $length_key, $length_key, $key, $length_sep, $sep, '';
                 }
                 else {
-                    my $text = $line_fold->fold( '' , '', $a_ref->[$row][$col] );
+                    my $text = $line_fold->fold( $a_ref->[$row][$col], 'PLAIN' );
                     for my $line ( split /\R+/, $text ) {
                         push @{$row_data}, sprintf "%*.*s%*s%s", $length_key, $length_key, $key, $length_sep, $sep, $line;
                         $key = '' if $key;
@@ -1980,7 +1997,7 @@ sub func_print_tbl {
     else {
         choose(
             $list,
-            { prompt => '', %{$info->{lyt_3_cs}}, limit => $limit, ll => $len }
+            { prompt => '', %{$info->{lyt_3_cs}}, limit => $limit_choose, ll => $len }
         );
         return;
     }
@@ -2006,11 +2023,12 @@ sub options {
             splice( @choices, $idx, 1 );
         }
     }
+    my $path = '  Path';
 
     OPTION: while ( 1 ) {
         # Choose
         my $option = choose(
-            [ undef, $info->{_continue}, $info->{_help}, @choices ],
+            [ undef, $info->{_continue}, $info->{_help}, $path, @choices ],
             { %{$info->{lyt_3_cs}}, undef => $info->{_exit} }
         );
         if ( ! defined $option ) {
@@ -2029,6 +2047,12 @@ sub options {
         }
         elsif ( $option eq $info->{_help} ) {
             pod2usage( { -exitval => 'NOEXIT', -verbose => 2 } );
+        }
+        elsif ( $option eq $path ) {
+            my $prompt =
+                "\n" . '    bin: ' . rel2abs(__FILE__)      . "\n" .
+                "\n" . 'app dir: ' . $info->{app_dir} . '/' . "\n\n";
+            choose( [ 'Close with ENTER' ], { prompt => $prompt, layout => 3 } );
         }
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
             my $max = 99;
@@ -2665,6 +2689,7 @@ sub get_db_handle {
         PrintError => 0,
         RaiseError => 1,
         AutoCommit => 1,
+        ShowErrorStatement => 1,
         %db_opt,
     } ) or die DBI->errstr;
     if ( $info->{db_driver} eq 'SQLite' ) {
@@ -2677,7 +2702,7 @@ sub get_db_handle {
         $dbh->sqlite_create_function( 'truncate', 2, sub {
                 my ( $number, $places ) = @_;
                 return if ! defined $number;
-                #return sprintf( "%s", $number ) if ! looks_like_number( $number ); # ?
+                # return $number if ! looks_like_number( $number ); # ?
                 return sprintf( "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places );
             }
         )
@@ -2826,7 +2851,7 @@ sub get_table_names {
         }
         else {
             my $stmt = "SELECT name FROM sqlite_master
-                           WHERE type = 'table' AND name NOT REGEXP '^sqlite'
+                           WHERE type = 'table' AND name NOT REGEXP '^sqlite_'
                            ORDER BY name";
             $tables = $dbh->selectcol_arrayref( $stmt );
         }
@@ -2843,7 +2868,7 @@ sub get_table_names {
 
 sub regexp_system_tables {
     my ( $db_driver ) = @_;
-    return qr/^sqlite/i if $db_driver eq 'SQLite';
+    return qr/^sqlite_/i if $db_driver eq 'SQLite';
     return;
 }
 
@@ -2887,16 +2912,10 @@ sub primary_and_foreign_keys {
     my $fks     = {};
     for my $table ( @{$data->{$db}{$schema}{tables}} ) {
         if ( $info->{db_driver} eq 'SQLite' ) {
-            my $stmt = "SELECT sql FROM sqlite_master
-                           WHERE type = 'table' AND name = ?";
-            my $a_ref = $dbh->selectrow_arrayref( $stmt, {}, $table );
-            my @references = grep { /FOREIGN\sKEY/ } split /\s*\n\s*/, $a_ref->[0];
-            for my $i ( 0 .. $#references ) {
-                if ( $references[$i] =~ /FOREIGN\sKEY\s?\(([^)]+)\)\sREFERENCES\s([^(]+)\(([^)]+)\),?/ ) {
-                    $fks->{$table}{$i}{foreign_key_col}   = [ split /\s*,\s*/, $1 ];
-                    $fks->{$table}{$i}{reference_key_col} = [ split /\s*,\s*/, $3 ];
-                    $fks->{$table}{$i}{reference_table}   = $2;
-                }
+            for my $c ( @{$dbh->selectall_arrayref( "pragma foreign_key_list( $table )" )} ) {
+                $fks->{$table}{$c->[0]}{foreign_key_col}  [$c->[1]] = $c->[3];
+                $fks->{$table}{$c->[0]}{reference_key_col}[$c->[1]] = $c->[4];
+                $fks->{$table}{$c->[0]}{reference_table} = $c->[2];
             }
         }
         elsif ( $info->{db_driver} eq 'mysql' ) {
@@ -2916,7 +2935,6 @@ sub primary_and_foreign_keys {
                 }
             }
         }
-        #elsif ( $info->{db_driver} eq 'Pg' ) {
         else {
             my $sth = $dbh->foreign_key_info( undef, undef, undef, undef, $schema, $table );
             if ( defined $sth ) {
@@ -3043,7 +3061,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.006
+Version 0.007
 
 =cut
 
@@ -3071,9 +3089,9 @@ Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database privileges required for fetching the respective data.
 
-The C<db-browser> expects an C<UTF-8> environment.
+The C<db-browser> expects an C<UTF-8> environment and an existing "home" directory with read and write permissions for the user of C<db-browser>.
 
-The configuration file and the file with the cached search results for C<SQLite> databases are located in the I<$HOME/.db_browser_conf> directory.
+It is not (yet) possible to set the host and the port when connecting to a database.
 
 =head1 USAGE
 
@@ -3109,9 +3127,13 @@ The C<q> key goes back (C<Ctrl-D> instead of C<q> if prompted for a string) in t
 
 =head2 OPTIONS
 
-=head3 Help
+=head3 HELP
 
 Show this Info.
+
+=head3 Path
+
+Shows the path of the running C<db-browser> and the application directory.
 
 =head3 Tabwidth
 
@@ -3125,15 +3147,19 @@ Set the width the columns should have at least when printed.
 
 Set the string that will be shown on the screen instead of an undefined field.
 
-=head3 Rows
+=head3 Max Rows
 
 Set the maximum number of fetched table rows. This can be overwritten by setting a C<SQL> C<LIMIT> statement.
+
+The fetched table rows are kept in memory.
+
+To disable the automatic limit set I<max rows> to C<undef> (--).
 
 =head3 ProgressBar
 
 Set the progress bar threshold. If the number of fields (rows x columns) is higher than the threshold a progress bar is shown while preparing the data for the output.
 
-=head3 DB drivers
+=head3 DB Drivers
 
 Choose the needed database drivers.
 
@@ -3145,7 +3171,7 @@ Choose the needed operators.
 
 Choose the thousands separator displayed in menus.
 
-=head3 Sssc mode
+=head3 Sssc Mode
 
 With the I<Sssc> mode "compat" enabled back-arrows are offered in the C<SQL> "sub-statement" menus. In the "simple" mode it can be used the C<q> key instead of the back-arrows.
 
@@ -3159,7 +3185,7 @@ For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Ex
 
 For "Print Table" "Enchanted" means: enable printing the chosen table row.
 
-=head3 Mouse mode
+=head3 Mouse Mode
 
 Set the I<mouse mode> (see L<Term::Choose/mouse>).
 
@@ -3175,13 +3201,13 @@ Set the default I<lock> value:
 
 If enabled system tables/schemas/databases are appended to the respective list.
 
-=head3 Regexp case
+=head3 Regexp Case
 
 If enabled C<REGEXP> will match case sensitive.
 
 With C<MySQL> the sensitive match is achieved by enabling the C<BINARY> operator.
 
-=head3 DB login
+=head3 DB Login
 
 Determine how often C<db-browser> asks for the login data:
 
@@ -3191,11 +3217,11 @@ Determine how often C<db-browser> asks for the login data:
 
 - only once: log in data is asked only once and then used for all connections.
 
-=head3 DB defaults
+=head3 DB Defaults
 
 Set Database defaults:
 
-=head4 Default user
+=head4 Default User
 
 If set the I<default user> is used as username for database logins.
 
@@ -3211,7 +3237,7 @@ If enabled the C<utf8> flag will be turned on for character data coming from the
 
 For a more driver specific explanation see the documentation of the respective Perl C<DBI> driver.
 
-=head4 "Binary filter"
+=head4 "Binary Filter"
 
 Print "BNRY" instead of arbitrary binary data.
 
