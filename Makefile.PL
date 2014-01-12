@@ -10,6 +10,16 @@ WriteMakefile(
     PL_FILES         => {},
     MIN_PERL_VERSION => '5.010001',
     LICENSE          => 'perl',
+    META_MERGE => {
+        'meta-spec' => { version => 2 },
+        resources   => {
+            repository => {
+              type => 'git',
+              web  => 'https://github.com/kuerbis/App-DBBrowser',
+              url  => 'https://github.com/kuerbis/App-DBBrowser.git',
+            },
+        },
+    },
     AUTHOR           => 'Matthaeus Kiem <cuer2s@gmail.com>',
     NAME             => 'App::DBBrowser',
     VERSION_FROM     => 'lib/App/DBBrowser.pm',

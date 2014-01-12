@@ -4,7 +4,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.007';
+our $VERSION = '0.008';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -28,7 +28,7 @@ use Unicode::GCString qw();
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# ToDo (...l...)
+# ToDo (...l,pb...)
 
 END { ReadMode 0 }
 
@@ -2049,10 +2049,15 @@ sub options {
             pod2usage( { -exitval => 'NOEXIT', -verbose => 2 } );
         }
         elsif ( $option eq $path ) {
-            my $prompt =
-                "\n" . '    bin: ' . rel2abs(__FILE__)      . "\n" .
-                "\n" . 'app dir: ' . $info->{app_dir} . '/' . "\n\n";
-            choose( [ 'Close with ENTER' ], { prompt => $prompt, layout => 3 } );
+            my $bin     = 'bin';
+            my $app_dir = 'app dir';
+            my $path = {
+                $bin     => rel2abs( $0 ),
+                $app_dir => $info->{app_dir} . '/',
+            };
+            my $keys = [ $bin, $app_dir ];
+            my $len_key = 7;
+            print_hash( $path, $keys, $len_key, ( GetTerminalSize )[0] );
         }
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
             my $max = 99;
@@ -2375,6 +2380,30 @@ sub print_error_message {
     utf8::decode( $message );
     print $message;
     choose( [ 'Press ENTER to continue' ], { prompt => '', %{$info->{lyt_stop}} } );
+}
+
+
+sub print_hash {
+    my ( $hash, $keys, $len_key, $maxcols ) = @_;
+    my $s_tab = $len_key + length( ' : ' );
+    my $col_max = $maxcols - $s_tab;
+    my $lf = Text::LineFold->new(
+        Charset       => 'utf-8',
+        ColMax        => $col_max,
+        Newline       => "\n",
+        OutputCharset => '_UNICODE_',
+        Urgent        => 'FORCE',
+    );
+    my @vals = ();
+    for my $key ( @$keys ) {
+        my $pr_key = sprintf "%*.*s : ", $len_key, $len_key, $key;
+        my $text = $lf->fold( '' , ' ' x $s_tab, $pr_key . $hash->{$key} );
+        $text =~ s/\R+\z//;
+        for my $val ( split /\R+/, $text ) {
+            push @vals, $val;
+        }
+    }
+    choose( [ @vals ], { layout => 3, clear_screen => 1 } );
 }
 
 
@@ -3061,7 +3090,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.007
+Version 0.008
 
 =cut
 

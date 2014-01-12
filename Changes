@@ -1,6 +1,10 @@
 Revision history for App-DBBrowser
 
 
+0.008   2014-01-12
+        - Added link to the GitHub repo "App-DBBrowser".
+        - Code refactoring.
+
 0.007   2014-01-11
         - Bugfixed undefined "sqlite_master" primary and foreign keys by replacing in "primary_and_foreign_keys" the parsing of "sqlite_master" with "pragma foreign_key_list(table)".
         - Bugfix: regexp for SQLite systemtables from "/sqlite/i" to "/sqlite_/i".
