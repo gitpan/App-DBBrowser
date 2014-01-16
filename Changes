@@ -1,6 +1,14 @@
 Revision history for App-DBBrowser
 
 
+0.009   2014-01-16
+        - New option "Parentheses". Enable parentheses in "WHERE" or/and "HAVING TO" clause.
+        - New database options to set "host" and "port" (untested).
+        - Bugfix: quoting alias in "aggregate" with "quote_identifier" instead of "quote".
+        - Experimental: typecast to "numeric" in aggregate function if driver is 'Pg'.
+        - Hidden: added function "BIT_LENGTH" and "CHAR_LENGTH".
+        - Updated documentation.
+
 0.008   2014-01-12
         - Added link to the GitHub repo "App-DBBrowser".
         - Code refactoring.

@@ -4,7 +4,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.008';
+our $VERSION = '0.009';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -28,7 +28,6 @@ use Unicode::GCString qw();
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# ToDo (...l,pb...)
 
 END { ReadMode 0 }
 
@@ -81,8 +80,9 @@ my $info = {
                            " = col", " != col", " <> col", " < col", " > col", " >= col", " <= col" ],
                            # "LIKE col%", "NOT LIKE col%", "LIKE %col", "NOT LIKE %col",
     avail_db_drivers  => [ 'SQLite', 'mysql', 'Pg' ],
-    hidd_func_pr      => { Epoch_to_Date => 'DATE', Truncate => 'TRUNC', Epoch_to_DateTime => 'DATETIME' },
-    keys_hidd_func_pr => [ qw( Epoch_to_Date Truncate Epoch_to_DateTime ) ],
+    hidd_func_pr      => { Epoch_to_Date => 'DATE', Truncate => 'TRUNC', Epoch_to_DateTime => 'DATETIME',
+                           Bit_Length => 'BIT_LENGTH', Char_Length => 'CHAR_LENGTH' },
+    keys_hidd_func_pr => [ qw( Epoch_to_Date Truncate Epoch_to_DateTime Bit_Length Char_Length ) ],
 };
 
 my $my_db_drivers = [ 'SQLite', 'mysql', 'Pg' ];
@@ -100,6 +100,9 @@ my $opt = {
         lock_stmt      => [ 0, '- Lock' ],
         system_info    => [ 0, '- Metadata' ],
         regexp_case    => [ 0, '- Regexp Case' ],
+        parentheses    => [ 1,             '- Parentheses' ],
+            w_parentheses => [ 0, '- Parentheses in WHERE' ],
+            h_parentheses => [ 0, '- Parentheses in HAVING TO' ],
     },
     menu => {
         thsd_sep       => [ ',',           '- Separator' ],
@@ -108,10 +111,10 @@ my $opt = {
         sssc_mode      => [ 0,             '- Sssc Mode' ],
         mouse          => [ 0,             '- Mouse Mode' ],
         expand         => [ 1,             '- Expand' ],
-          keep_db_choice     => [ 0, '- Choose Database' ],
-          keep_schema_choice => [ 0, '- Choose Schema' ],
-          keep_table_choice  => [ 0, '- Choose Table' ],
-          table_expand       => [ 1, '- Print  Table' ],
+            keep_db_choice     => [ 0, '- Choose Database' ],
+            keep_schema_choice => [ 0, '- Choose Schema' ],
+            keep_table_choice  => [ 0, '- Choose Table' ],
+            table_expand       => [ 1, '- Print  Table' ],
     },
     dbs => {
         login               => [ 0,       '- DB Login' ],
@@ -125,11 +128,15 @@ my $opt = {
     },
     mysql => {
         default_user        => [ '', '- Default User' ],
+        host                => [ '', '- Host' ],
+        port                => [ '', '- Port' ],
         mysql_enable_utf8   => [ 1,  '- Enable utf8' ],
         binary_filter       => [ 0,  '- Binary Filter' ],
     },
     Pg => {
         default_user        => [ '', '- Default User' ],
+        host                => [ '', '- Host' ],
+        port                => [ '', '- Port' ],
         pg_enable_utf8      => [ 1,  '- Enable utf8' ],
         binary_filter       => [ 0,  '- Binary Filter' ],
     }
@@ -137,16 +144,17 @@ my $opt = {
 
 $info->{option_sections} = [ qw( print sql menu dbs ) ];
 $info->{print}{keys}     = [ qw( tab_width min_col_width undef limit progress_bar ) ];
-$info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case ) ];
+$info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case parentheses ) ];
 $info->{dbs}{keys}       = [ qw( login db_defaults ) ];
 $info->{menu}{keys}      = [ qw( thsd_sep db_drivers operators sssc_mode expand keep_db_choice
                                  keep_schema_choice keep_table_choice table_expand mouse ) ];
 $info->{db_sections}     = [ qw( SQLite mysql Pg ) ];
 $info->{SQLite}{keys}    = [ qw( reset_cache unicode see_if_its_a_number binary_filter ) ];
-$info->{mysql}{keys}     = [ qw( default_user mysql_enable_utf8 binary_filter ) ];
-$info->{Pg}{keys}        = [ qw( default_user pg_enable_utf8 binary_filter ) ];
+$info->{mysql}{keys}     = [ qw( default_user mysql_enable_utf8 binary_filter host port ) ];
+$info->{Pg}{keys}        = [ qw( default_user pg_enable_utf8 binary_filter host port ) ];
 
 $info->{sub_expand}{menu}     = [ qw( keep_db_choice keep_schema_choice keep_table_choice table_expand ) ];
+$info->{sub_parentheses}{sql} = [ qw( w_parentheses h_parentheses ) ];
 $info->{cmdline_only}{SQLite} = [ qw( reset_cache ) ];
 
 
@@ -1031,8 +1039,8 @@ sub read_table {
                 }
                 else {
                     $aggr =~ s/\(\S\)\z//;
-                    $sql->{quote}{aggr_cols}[$i] = $aggr . '(';
-                    $sql->{print}{aggr_cols}[$i] = $aggr . '(';
+                    $sql->{quote}{aggr_cols}[$i] = $aggr . "(";
+                    $sql->{print}{aggr_cols}[$i] = $aggr . "(";
                     if ( $aggr eq 'COUNT' ) {
                         my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                         my $choices = [ $ALL, $DISTINCT ];
@@ -1066,11 +1074,12 @@ sub read_table {
                         next AGGREGATE;
                     }
                     ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
-                    $sql->{print}{aggr_cols}[$i] .= $print_col . ')';
-                    $sql->{quote}{aggr_cols}[$i] .= $quote_col . ')';
+                    $sql->{print}{aggr_cols}[$i] .= $print_col . ")";
+                    #$sql->{quote}{aggr_cols}[$i] .= $quote_col . ")";
+                    $sql->{quote}{aggr_cols}[$i] .= $quote_col . ( $info->{db_driver} eq 'Pg' ? '::numeric' : '' ) . ")"; # Experimental
                 }
                 $sql->{print}{aggr_cols}[$i] = unambiguous_key( $sql->{print}{aggr_cols}[$i], $pr_columns );
-                $sql->{quote}{aggr_cols}[$i] .= ' AS ' . $dbh->quote( $sql->{print}{aggr_cols}[$i] );
+                $sql->{quote}{aggr_cols}[$i] .= " AS " . $dbh->quote_identifier( $sql->{print}{aggr_cols}[$i] );
                 my $print_aggr = $sql->{print}{aggr_cols}[$i];
                 my $quote_aggr = $sql->{quote}{aggr_cols}[$i];
                 ( $qt_columns->{$print_aggr} = $quote_aggr ) =~ s/\sAS\s\S+//;
@@ -1078,15 +1087,19 @@ sub read_table {
         }
         elsif ( $custom eq $customize{'where'} ) {
             my @cols = ( @$pr_columns, @{$sql->{print}{hidd}} );
-            my $AND_OR = '';
+            my $AND_OR = ' ';
             $sql->{quote}{where_args} = [];
             $sql->{quote}{where_stmt} = " WHERE";
             $sql->{print}{where_stmt} = " WHERE";
+            my $unclosed = 0;
             my $count = 0;
 
             WHERE: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 my $choices = [ $info->{ok}, @cols ];
+                if ( $opt->{sql}{w_parentheses}[v] ) {
+                    push @$choices, $unclosed ? ')' : '(';
+                }
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 # Choose
                 my $print_col = choose(
@@ -1099,7 +1112,7 @@ sub read_table {
                         $sql->{quote}{where_stmt} = " WHERE";
                         $sql->{print}{where_stmt} = " WHERE";
                         $count = 0;
-                        $AND_OR = '';
+                        $AND_OR = ' ';
                         next WHERE;
                     }
                     else {
@@ -1114,7 +1127,13 @@ sub read_table {
                     }
                     last WHERE;
                 }
-                if ( $count > 0 ) {
+                if ( $print_col eq ')' ) {
+                    $sql->{quote}{where_stmt} .= ")";
+                    $sql->{print}{where_stmt} .= ")";
+                    $unclosed--;
+                    next WHERE;
+                }
+                if ( $count > 0 && $sql->{quote}{where_stmt} !~ /\(\z/ ) {
                     my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1128,21 +1147,29 @@ sub read_table {
                         $sql->{quote}{where_stmt} = " WHERE";
                         $sql->{print}{where_stmt} = " WHERE";
                         $count = 0;
-                        $AND_OR = '';
+                        $AND_OR = ' ';
                         next WHERE;
                     }
-                    $AND_OR = ' ' . $AND_OR;
+                    $AND_OR = ' ' . $AND_OR . ' ';
                 }
+                if ( $print_col eq '(' ) {
+                    $sql->{quote}{where_stmt} .= $AND_OR . "(";
+                    $sql->{print}{where_stmt} .= $AND_OR . "(";
+                    $AND_OR = '';
+                    $unclosed++;
+                    next WHERE;
+                }
+
                 ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
-                $sql->{quote}{where_stmt} .= $AND_OR . ' ' . $quote_col;
-                $sql->{print}{where_stmt} .= $AND_OR . ' ' . $print_col;
+                $sql->{quote}{where_stmt} .= $AND_OR . $quote_col;
+                $sql->{print}{where_stmt} .= $AND_OR . $print_col;
                 set_operator_sql( $info, $opt, $sql, 'where', $table, \@cols, $qt_columns, $quote_col );
                 if ( ! $sql->{quote}{where_stmt} ) {
                     $sql->{quote}{where_args} = [];
                     $sql->{quote}{where_stmt} = " WHERE";
                     $sql->{print}{where_stmt} = " WHERE";
                     $count = 0;
-                    $AND_OR = '';
+                    $AND_OR = ' ';
                     next WHERE;
                 }
                 $count++;
@@ -1198,15 +1225,19 @@ sub read_table {
         }
         elsif( $custom eq $customize{'having'} ) {
             my @cols = ( @$pr_columns );
-            my $AND_OR = '';
+            my $AND_OR = ' ';
             $sql->{quote}{having_args} = [];
             $sql->{quote}{having_stmt} = " HAVING";
             $sql->{print}{having_stmt} = " HAVING";
+            my $unclosed = 0;
             my $count = 0;
 
             HAVING: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 my $choices = [ $info->{ok}, @{$info->{avail_aggregate}}, map( '@' . $_, @{$sql->{print}{aggr_cols}} ) ];
+                if ( $opt->{sql}{h_parentheses}[v] ) {
+                    push @$choices, $unclosed ? ')' : '(';
+                }
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 # Choose
                 my $aggr = choose(
@@ -1219,7 +1250,7 @@ sub read_table {
                         $sql->{quote}{having_stmt} = " HAVING";
                         $sql->{print}{having_stmt} = " HAVING";
                         $count = 0;
-                        $AND_OR = '';
+                        $AND_OR = ' ';
                         next HAVING;
                     }
                     else {
@@ -1234,7 +1265,13 @@ sub read_table {
                     }
                     last HAVING;
                 }
-                if ( $count > 0 ) {
+                if ( $aggr eq ')' ) {
+                    $sql->{quote}{having_stmt} .= ")";
+                    $sql->{print}{having_stmt} .= ")";
+                    $unclosed--;
+                    next HAVING;
+                }
+                if ( $count > 0 && $sql->{quote}{having_stmt} !~ /\(\z/ ) {
                     my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1248,18 +1285,25 @@ sub read_table {
                         $sql->{quote}{having_stmt} = " HAVING";
                         $sql->{print}{having_stmt} = " HAVING";
                         $count = 0;
-                        $AND_OR = '';
+                        $AND_OR = ' ';
                         next HAVING;
                     }
-                    $AND_OR = ' ' . $AND_OR;
+                    $AND_OR = ' ' . $AND_OR . ' ';
+                }
+                if ( $aggr eq '(' ) {
+                    $sql->{quote}{having_stmt} .= $AND_OR . "(";
+                    $sql->{print}{having_stmt} .= $AND_OR . "(";
+                    $AND_OR = '';
+                    $unclosed++;
+                    next HAVING;
                 }
                 my ( $print_col,  $quote_col );
                 my ( $print_aggr, $quote_aggr);
                 if ( ( any { '@' . $_ eq $aggr } @{$sql->{print}{aggr_cols}} ) ) {
                     ( $print_aggr = $aggr ) =~ s/^\@//;
                     $quote_aggr = $qt_columns->{$print_aggr};
-                    $sql->{quote}{having_stmt} .= $AND_OR . ' ' . $quote_aggr;
-                    $sql->{print}{having_stmt} .= $AND_OR . ' ' . $print_aggr;
+                    $sql->{quote}{having_stmt} .= $AND_OR . $quote_aggr;
+                    $sql->{print}{having_stmt} .= $AND_OR . $print_aggr;
                     $quote_col = $qt_columns->{$print_aggr};
                 }
                 elsif ( $aggr eq 'COUNT(*)' ) {
@@ -1267,15 +1311,15 @@ sub read_table {
                     $quote_col = '*';
                     $print_aggr = $aggr;
                     $quote_aggr = $aggr;
-                    $sql->{quote}{having_stmt} .= $AND_OR . ' ' . $quote_aggr;
-                    $sql->{print}{having_stmt} .= $AND_OR . ' ' . $print_aggr;
+                    $sql->{quote}{having_stmt} .= $AND_OR . $quote_aggr;
+                    $sql->{print}{having_stmt} .= $AND_OR . $print_aggr;
                 }
                 else {
                     $aggr =~ s/\(\S\)\z//;
-                    $sql->{quote}{having_stmt} .= $AND_OR . ' ' . $aggr . '(';
-                    $sql->{print}{having_stmt} .= $AND_OR . ' ' . $aggr . '(';
-                    $quote_aggr                 =                 $aggr . '(';
-                    $print_aggr                 =                 $aggr . '(';
+                    $sql->{quote}{having_stmt} .= $AND_OR . $aggr . "(";
+                    $sql->{print}{having_stmt} .= $AND_OR . $aggr . "(";
+                    $quote_aggr                 =           $aggr . "(";
+                    $print_aggr                 =           $aggr . "(";
                     my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                     my $choices = [ @cols ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1289,14 +1333,16 @@ sub read_table {
                         $sql->{quote}{having_stmt} = " HAVING";
                         $sql->{print}{having_stmt} = " HAVING";
                         $count = 0;
-                        $AND_OR = '';
+                        $AND_OR = ' ';
                         next HAVING;
                     }
                     ( $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
-                    $sql->{quote}{having_stmt} .= $quote_col . ')';
-                    $sql->{print}{having_stmt} .= $print_col . ')';
-                    $quote_aggr                .= $quote_col . ')';
-                    $print_aggr                .= $print_col . ')';
+                    #$sql->{quote}{having_stmt} .= $quote_col . ")";
+                    $sql->{quote}{having_stmt} .= $quote_col . ( $info->{db_driver} eq 'Pg' ? '::numeric' : '' ) . ")"; # Experimental
+                    $sql->{print}{having_stmt} .= $print_col . ")";
+                    #$quote_aggr                .= $quote_col . ")";
+                    $quote_aggr                .= $quote_col . ( $info->{db_driver} eq 'Pg' ? '::numeric' : '' ) . ")"; # Experimental
+                    $print_aggr                .= $print_col . ")";
                 }
                 set_operator_sql( $info, $opt, $sql, 'having', $table, \@cols, $qt_columns, $quote_aggr );
                 if ( ! $sql->{quote}{having_stmt} ) {
@@ -1304,7 +1350,7 @@ sub read_table {
                     $sql->{quote}{having_stmt} = " HAVING";
                     $sql->{print}{having_stmt} = " HAVING";
                     $count = 0;
-                    $AND_OR = '';
+                    $AND_OR = ' ';
                     next HAVING;
                 }
                 $count++;
@@ -1455,12 +1501,18 @@ sub read_table {
             HIDDEN: while ( 1 ) {
                 my @cols = @{$sql->{print}{$stmt_key}};
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
-                my $choices = [ undef, $info->{_confirm}, map( "- $_", @cols ) ];
+                my @pre = ( undef, $info->{_confirm} );
+                my $choices = [ @pre, map( "- $_", @cols ) ];
                 # Choose
-                my $print_col = choose(
+                my $i = choose(
                     $choices,
-                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}} }
+                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}}, index => 1 }
                 );
+                if ( ! defined $i ) {
+                    $sql = clone( $backup_sql );
+                    last HIDDEN;
+                }
+                my $print_col = $choices->[$i];
                 if ( ! defined $print_col ) {
                     $sql = clone( $backup_sql );
                     last HIDDEN;
@@ -1473,8 +1525,8 @@ sub read_table {
                     $sql->{select_type} = $stmt_key if ! $sql->{select_type};
                     last HIDDEN;
                 }
+                $i -= @pre;
                 $print_col =~ s/^\-\s//;
-                my $i = first_index { $_ eq $print_col } @cols;
                 if ( $sql->{print}{$stmt_key}[$i] ne $sql->{backup_in_hidd}{print}{$stmt_key}[$i] ) {
                     if ( $stmt_key eq 'chosen_cols' ) {
                         my $i = first_index { $sql->{print}{$stmt_key}[$i] eq $_ } @{$sql->{print}{hidd}};
@@ -2096,6 +2148,12 @@ sub options {
             my ( $section, $key, $prompt ) = ( 'sql', 'regexp_case', 'REGEXP case sensitiv' );
             opt_yes_no( $info, $opt, $section, $key, $prompt );
         }
+        elsif ( $option eq $opt->{"sql"}{'parentheses'}[chs] ) {
+            my $section = 'sql';
+            my $keys = $info->{sub_parentheses}{sql};
+            my $two_val = [ 'NO', 'YES' ];
+            multi_options( $info, $opt, $section, $keys, $two_val );
+        }
         elsif ( $option eq $opt->{"dbs"}{'login'}[chs] ) {
             my $list = [ 'for every connection', 'once per DB', 'only once' ];
             my ( $section, $key, $prompt ) = ( 'dbs', 'login', 'Ask for credentials' );
@@ -2130,43 +2188,56 @@ sub options {
             opt_number( $info, $opt, $section, $key, $prompt, $max );
         }
         elsif ( $option eq $opt->{"menu"}{'expand'}[chs] ) {
-            my $count;
-            my ( $memory, $simple ) = ( 'Enchanted', 'Simple' );
-            my @keys = @{$info->{sub_expand}{menu}};
-            my $tmp = {};
-            for my $key ( @keys ) {
-                $tmp->{menu}{$key}[v] = $opt->{menu}{$key}[v];
-            }
-            while ( 1 ) {
-                my $choices = [ undef ];
-                for my $key ( @keys ) {
-                    my $current = $tmp->{menu}{$key}[v] ? $memory : $simple;
-                    push @$choices, sprintf "%-18s[%s]", $opt->{menu}{$key}[chs], $current;
-                }
-                push @$choices, $info->{_confirm};
-                # Choose
-                my $idx = choose(
-                    $choices,
-                    { prompt => 'Choose:', %{$info->{lyt_3_cs}}, index => 1 }
-                );
-                next OPTION if ! defined $idx;
-                my $choice = $choices->[$idx];
-                next OPTION if ! defined $choice;
-                if ( $choice eq $info->{_confirm} ) {
-                    if ( $count ) {
-                        for my $key ( @keys ) {
-                            $opt->{menu}{$key}[v] = $tmp->{menu}{$key}[v];
-                        }
-                        $info->{write_config}++;
-                    }
-                    next OPTION;
-                }
-                my $key = $keys[$idx-1];
-                $tmp->{menu}{$key}[v] = $tmp->{menu}{$key}[v] ? 0 : 1;
-                $count++;
-            }
+            my $section = 'menu';
+            my $keys = $info->{sub_expand}{menu};
+            my $two_val = [ 'Simple', 'Enchanted' ];
+            multi_options( $info, $opt, $section, $keys, $two_val );
         }
         else { die $option }
+    }
+}
+
+
+sub multi_options {
+    my ( $info, $opt, $section, $keys, $values ) = @_;
+    my $count;
+    my $tmp = {};
+    my $longest = 0;
+    for my $key ( @$keys ) {
+        my $gcs = Unicode::GCString->new( $opt->{$section}{$key}[chs] );
+        my $length = $gcs->columns();
+        $longest = $length if $length > $longest;
+        $tmp->{$section}{$key}[v] = $opt->{$section}{$key}[v];
+    }
+    while ( 1 ) {
+        my $choices = [ undef ];
+        for my $key ( @$keys ) {
+            my $current = $values->[$tmp->{$section}{$key}[v]];
+            push @$choices, sprintf "%-*s [%s]", $longest, $opt->{$section}{$key}[chs], $current;
+        }
+        push @$choices, $info->{_confirm};
+        # Choose
+        my $idx = choose(
+            $choices,
+            { prompt => 'Choose:', %{$info->{lyt_3_cs}}, index => 1 }
+        );
+        return if ! defined $idx;
+        my $choice = $choices->[$idx];
+        return if ! defined $choice;
+        if ( $choice eq $info->{_confirm} ) {
+            if ( $count ) {
+                for my $key ( @$keys ) {
+                    $opt->{$section}{$key}[v] = $tmp->{$section}{$key}[v];
+                }
+                $info->{write_config}++;
+            }
+            return;
+        }
+        my $key = $keys->[$idx-1];
+        #$tmp->{$section}{$key}[v] = $tmp->{$section}{$key}[v] ? 0 : 1;
+        $tmp->{$section}{$key}[v]++;
+        $tmp->{$section}{$key}[v] = 0 if $tmp->{$section}{$key}[v] == @$values;
+        $count++;
     }
 }
 
@@ -2350,6 +2421,14 @@ sub database_setting {
                 my ( $key, $prompt ) = ( 'default_user', 'Default user' );
                 opt_readline( $info, $opt, $section, $key, $prompt );
             }
+            elsif ( $option eq $opt->{"mysql"}{host}[chs] ) {
+                my ( $key, $prompt ) = ( 'host', 'Host' );
+                opt_readline( $info, $opt, $section, $key, $prompt );
+            }
+            elsif ( $option eq $opt->{"mysql"}{port}[chs] ) {
+                my ( $key, $prompt ) = ( 'port', 'Port' );
+                opt_readline( $info, $opt, $section, $key, $prompt );
+            }
             elsif ( $option eq $opt->{"mysql"}{binary_filter}[chs] ) {
                 my ( $key, $prompt ) = ( 'binary_filter', 'Enable Binary Filter' );
                 opt_yes_no( $info, $opt, $section, $key, $prompt );
@@ -2363,6 +2442,14 @@ sub database_setting {
             }
             elsif ( $option eq $opt->{"Pg"}{default_user}[chs] ) {
                 my ( $key, $prompt ) = ( 'default_user', 'Default user' );
+                opt_readline( $info, $opt, $section, $key, $prompt );
+            }
+            elsif ( $option eq $opt->{"Pg"}{host}[chs] ) {
+                my ( $key, $prompt ) = ( 'host', 'Host' );
+                opt_readline( $info, $opt, $section, $key, $prompt );
+            }
+            elsif ( $option eq $opt->{"Pg"}{port}[chs] ) {
+                my ( $key, $prompt ) = ( 'port', 'Port' );
                 opt_readline( $info, $opt, $section, $key, $prompt );
             }
             elsif ( $option eq $opt->{"Pg"}{binary_filter}[chs] ) {
@@ -2714,7 +2801,12 @@ sub get_db_handle {
         $db_opt{pg_enable_utf8} = $opt->{$db_key}{pg_enable_utf8}[v] // $opt->{Pg}{pg_enable_utf8}[v];
     }
     my ( $user, $passwd ) = get_credentials( $info, $opt, $db );
-    my $dbh = DBI->connect( "DBI:$info->{db_driver}:dbname=$db", $user, $passwd, {
+    my $dsn = 'dbi:' . $info->{db_driver} . ':dbname=' . $db;
+    my $host = $opt->{$db_key}{host}[v] || $opt->{$db_driver}{host}[v];
+    my $port = $opt->{$db_key}{port}[v] || $opt->{$db_driver}{port}[v];
+    $dsn .= ';host=' . $host if $host;
+    $dsn .= ';port=' . $port if $port;
+    my $dbh = DBI->connect( $dsn, $user, $passwd, {
         PrintError => 0,
         RaiseError => 1,
         AutoCommit => 1,
@@ -2734,7 +2826,19 @@ sub get_db_handle {
                 # return $number if ! looks_like_number( $number ); # ?
                 return sprintf( "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places );
             }
-        )
+        );
+        $dbh->sqlite_create_function( 'bit_length', 1, sub {
+                my ( $string ) = @_;
+                #return length( Encode::encode_utf8( $string ) );
+                use bytes;
+                return length( $string );
+            }
+        );
+        $dbh->sqlite_create_function( 'char_length', 1, sub {
+                my ( $string ) = @_;
+                return length( $string );
+            }
+        );
     }
     return $dbh;
 }
@@ -3065,9 +3169,18 @@ sub col_functions {
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
         my $precision = choose( $choices, { prompt => $prompt, %lyt_stmt } );
         return if ! defined $precision;
-        $quote_f = "TRUNCATE($quote_col,$precision)" if $db_driver eq 'mysql';
-        $quote_f = "TRUNC($quote_col,$precision)"    if $db_driver eq 'Pg';
-        $quote_f = "TRUNCATE($quote_col,$precision)" if $db_driver eq 'SQLite';
+        if ( $db_driver eq 'Pg' ) {
+            $quote_f = "TRUNC($quote_col,$precision)";
+        }
+        else {
+            $quote_f = "TRUNCATE($quote_col,$precision)";
+        }
+    }
+    elsif ( $func eq 'Bit_Length' ) {
+        $quote_f = "BIT_LENGTH($quote_col)";
+    }
+    elsif ( $func eq 'Char_Length' ) {
+        $quote_f = "CHAR_LENGTH($quote_col)";
     }
     return $quote_f, $print_f;
 }
@@ -3090,7 +3203,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.008
+Version 0.009
 
 =cut
 
@@ -3118,9 +3231,7 @@ Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database privileges required for fetching the respective data.
 
-The C<db-browser> expects an C<UTF-8> environment and an existing "home" directory with read and write permissions for the user of C<db-browser>.
-
-It is not (yet) possible to set the host and the port when connecting to a database.
+The C<db-browser> expects an C<UTF-8> environment and an existing C<home> directory with read and write permissions for the user of C<db-browser>.
 
 =head1 USAGE
 
@@ -3195,6 +3306,10 @@ Choose the needed database drivers.
 =head3 Operators
 
 Choose the needed operators.
+
+=head3 Parentheses
+
+Enable parentheses in C<WHERE> and/or C<HAVING TO> clauses.
 
 =head3 Separator
 

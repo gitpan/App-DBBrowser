@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.008';
+our $VERSION = '0.009';
 
 
 1;
@@ -21,7 +21,7 @@ App::DBBrowser - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.008
+Version 0.009
 
 =head1 SYNOPSIS
 
@@ -63,7 +63,7 @@ Matthäus Kiem <cuer2s@gmail.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2012-2014 Matthäus Kiem.
+Copyright (C) 2012-2014 Matthäus Kiem.
 
 This is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
