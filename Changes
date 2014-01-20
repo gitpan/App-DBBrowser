@@ -1,6 +1,15 @@
 Revision history for App-DBBrowser
 
 
+0.010   2014-01-20
+        - Removed experimental typecast (Pg - aggregate).
+        - Keep track of the terminal width instead of using "SIGWINCH".
+        - Adapted "db-browser" to the new "Term::Choose" (version 1.070): "choose" has now set no "limit" by default.
+        - "sql_regex": typecast to "text" for "Pg".
+        - Bugfix: if "select" is empty when leaving "aggregate" or "group by" set "select_type" to "*".
+        - If a field contains a reference replace the reference with the reference type plus ' REF'.
+        - Code refactoring.
+
 0.009   2014-01-16
         - New option "Parentheses". Enable parentheses in "WHERE" or/and "HAVING TO" clause.
         - New database options to set "host" and "port" (untested).
