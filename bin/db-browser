@@ -4,7 +4,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.010';
+our $VERSION = '0.011';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -80,7 +80,7 @@ my $info = {
     avail_db_drivers  => [ 'SQLite', 'mysql', 'Pg' ],
     hidd_func_pr      => { Epoch_to_Date => 'DATE', Truncate => 'TRUNC', Epoch_to_DateTime => 'DATETIME',
                            Bit_Length => 'BIT_LENGTH', Char_Length => 'CHAR_LENGTH' },
-    keys_hidd_func_pr => [ qw( Epoch_to_Date Truncate Epoch_to_DateTime Bit_Length Char_Length ) ],
+    keys_hidd_func_pr => [ qw( Epoch_to_Date Bit_Length Truncate Char_Length Epoch_to_DateTime ) ],
 };
 
 my $my_db_drivers = [ 'SQLite', 'mysql', 'Pg' ];
@@ -164,6 +164,9 @@ if ( ! eval {
     #        }
     #    }
     #}
+    for my $lyt ( grep { /^lyt_/ } keys %$info ) {
+        $info->{$lyt}{mouse} = $opt->{menu}{mouse}[v];
+    }
     my $help;
     GetOptions (
         'h|?|help' => \$help,
@@ -180,7 +183,6 @@ if ( ! eval {
 for my $lyt ( grep { /^lyt_/ } keys %$info ) {
     $info->{$lyt}{mouse} = $opt->{menu}{mouse}[v];
 }
-
 $info->{ok} = '<OK>' if $opt->{menu}{sssc_mode}[v];
 my $sqlite_search = $opt->{SQLite}{reset_cache}[v] ? 1 : 0;
 
@@ -1604,7 +1606,7 @@ sub read_table {
                 push @arguments, $opt->{print}{limit}[v];
                 $info->{auto_limit} = 1;
             }
-            say 'Computing: ...';
+            say 'Computing: ...' if defined $opt->{print}{progress_bar}[v];
             my $sth = $dbh->prepare( $select );
             $sth->execute( @arguments );
             my $col_names = $sth->{NAME};
@@ -1823,15 +1825,15 @@ sub calc_col_width {
         for my $i ( 0 .. $#$row ) {
             $width_cols->[$i] ||= 1;
             $row->[$i] = $opt->{print}{undef}[v] if ! defined $row->[$i];
+            if ( ref $row->[$i] ) {
+                $row->[$i] = handle_reference( $row->[$i] );
+            }
             my $width;
             if ( $binary_filter && substr( $row->[$i], 0, 100 ) =~ $binray_regexp ) {
                 $row->[$i] = $info->{binary_string};
                 $width = $binary_length;
             }
             else {
-                if ( ref $row->[$i] ) {
-                    $row->[$i] = ref( $row->[$i] ) . ' REF';
-                }
                 $row->[$i] =~ s/^\p{Space}+//;
                 $row->[$i] =~ s/\p{Space}+\z//;
                 #$row->[$i] =~ s/(?<=\P{Space})\p{Space}+/ /g;
@@ -1978,10 +1980,12 @@ sub func_print_tbl {
     my ( $info, $opt, $db, $a_ref ) = @_;
     my ( $term_width ) = GetTerminalSize;
     my $show_progress = 0;
-    if ( defined $opt->{print}{progress_bar}[v] && @$a_ref * @{$a_ref->[0]} > $opt->{print}{progress_bar}[v] ) {
-        $show_progress = 1;
+    if ( defined $opt->{print}{progress_bar}[v] ) {
+        say 'Computing: ...';
+        if ( @$a_ref * @{$a_ref->[0]} > $opt->{print}{progress_bar}[v] ) {
+            $show_progress = 1;
+        }
     }
-    say 'Computing: ...' if $show_progress;
     my ( $width_head, $width_cols, $not_a_number ) = calc_col_width( $info, $opt, $db, $a_ref, $term_width );
     ( $width_head, $width_cols ) = calc_avail_width( $info, $opt, $a_ref, $term_width, $width_head, $width_cols );
     return if ! $width_head || ! $width_cols;
@@ -2152,7 +2156,7 @@ sub options {
             multi_options( $info, $opt, $section, $keys, $two_val );
         }
         elsif ( $option eq $opt->{"dbs"}{'login'}[chs] ) {
-            my $list = [ 'for every connection', 'once per DB', 'only once' ];
+            my $list = [ 'once per DB', 'only once' ];
             my ( $section, $key, $prompt ) = ( 'dbs', 'login', 'Ask for credentials' );
             opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
         }
@@ -2657,6 +2661,32 @@ sub choose_a_number {
 }
 
 
+sub handle_reference {
+    my ( $ref ) = @_;
+    if ( ref $ref eq 'ARRAY' ) {
+        return 'ref: [' . join( ',', map { '"' . $_ . '"' } @$ref ) . ']';
+    }
+    elsif ( ref $ref eq 'SCALAR' ) {
+        return 'ref: \\' . $$ref;
+    }
+    elsif ( ref $ref eq 'HASH' ) {
+        return 'ref: {' . join( ',', map { $_ . '=>"' . $ref->{$_} . '"' } keys %$ref ) . '}';
+    }
+    elsif ( ref $ref eq 'Regexp' ) {
+        return 'ref: qr/' . $ref . '/';
+    }
+    elsif ( ref $ref eq 'VSTRING' ) {
+        return 'ref: \v' . join '.', unpack 'C*', $$ref;
+    }
+    elsif ( ref $ref eq 'GLOB' ) {
+        return 'ref: \\' . $$ref;
+    }
+    else {
+        return 'ref: ' . ref( $ref );
+    }
+}
+
+
 sub insert_sep {
     my ( $number, $separator ) = @_;
     return if ! defined $number;
@@ -2734,11 +2764,11 @@ sub get_credentials {
     }
     my $db_key = $info->{db_driver} . '_' . $db;
     my $login = $opt->{dbs}{login}[v];
-    if( $login == 1 ) {
+    if( $login == 0 ) {
         $user //= $info->{login}{$info->{db_driver}}{$db}{user};
         $passwd = $info->{login}{$info->{db_driver}}{$db}{passwd};
     }
-    elsif ( $login == 2 ) {
+    elsif ( $login == 1 ) {
         $user //= $info->{login}{$info->{db_driver}}{user};
         $passwd = $info->{login}{$info->{db_driver}}{passwd};
     }
@@ -2755,11 +2785,11 @@ sub get_credentials {
             { prompt => 'Password: ', status => "DB: $db\nUser: $user", no_echo => 1 }
         );
     }
-    if ( $login == 1 ) {
+    if ( $login == 0 ) {
         $info->{login}{$info->{db_driver}}{$db}{user}   = $user;
         $info->{login}{$info->{db_driver}}{$db}{passwd} = $passwd;
     }
-    elsif ( $login == 2 ) {
+    elsif ( $login == 1 ) {
         $info->{login}{$info->{db_driver}}{user}   = $user;
         $info->{login}{$info->{db_driver}}{passwd} = $passwd;
     }
@@ -3123,18 +3153,20 @@ sub concatenate {
 
 sub col_functions {
     my ( $info, $sql, $table, $func, $quote_col, $print_col ) = @_;
-    my %lyt_stmt_h     = %{$info->{lyt_stmt_h}};
-    my $db_driver      = $info->{db_driver};
+    my $db_driver    = $info->{db_driver};
     my $hidd_func_pr = $info->{hidd_func_pr};
     my ( $quote_f, $print_f );
     $print_f = $hidd_func_pr->{$func} . '(' . $print_col . ')';
     if ( $func =~ /^Epoch_to_Date(?:Time)?\z/ ) {
         my $prompt = print_select_statement( $info, $sql, $table, "$print_f\nInterval:" );
-        my ( $microseconds, $milliseconds, $seconds ) = ( 'Micro-Second', 'Milli-Second', 'Second' );
+        my ( $microseconds, $milliseconds, $seconds ) = (
+            '  0000000000000000   Micro-Second',
+            '  0000000000000      Milli-Second',
+            '  0000000000               Second' );
         my $choices = [ $microseconds, $milliseconds, $seconds ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
         # Choose
-        my $interval = choose( $choices, { prompt => $prompt, %lyt_stmt_h } );
+        my $interval = choose( $choices, { prompt => $prompt, %{$info->{lyt_stmt_v}} } );
         return if ! defined $interval;
         my $div = $interval eq $microseconds ? 1000000 :
                   $interval eq $milliseconds ? 1000 : 1;
@@ -3154,7 +3186,7 @@ sub col_functions {
         my $prompt = print_select_statement( $info, $sql, $table, "TRUNC $print_col\nDecimal places:" );
         my $choices = [ 0 .. 9 ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
-        my $precision = choose( $choices, { prompt => $prompt, %lyt_stmt_h } );
+        my $precision = choose( $choices, { prompt => $prompt, %{$info->{lyt_stmt_h}} } );
         return if ! defined $precision;
         if ( $db_driver eq 'Pg' ) {
             $quote_f = "TRUNC($quote_col,$precision)";
@@ -3190,7 +3222,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.010
+Version 0.011
 
 =cut
 
@@ -3219,6 +3251,8 @@ Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database privileges required for fetching the respective data.
 
 The C<db-browser> expects an C<UTF-8> environment and an existing C<home> directory with read and write permissions for the user of C<db-browser>.
+
+It is needed a terminal with a width of at least 40 print columns.
 
 =head1 USAGE
 
@@ -3340,11 +3374,9 @@ With C<MySQL> the sensitive match is achieved by enabling the C<BINARY> operator
 
 =head3 DB Login
 
-Determine how often C<db-browser> asks for the login data:
+Determine when C<db-browser> asks for the login data:
 
-- for every connection: log in data is asked for every new database connection.
-
-- once per DB: log in data is asked only once per database.
+- once per DB: log in data is asked once per database.
 
 - only once: log in data is asked only once and then used for all connections.
 

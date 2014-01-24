@@ -1,5 +1,5 @@
 App-DBBrowser
-============
+=============
 
 
 
@@ -27,10 +27,14 @@ db-browser -h
 
 LICENSE AND COPYRIGHT
 
-Copyright (C) 2013-2014 Matthäus Kiem
+Copyright (C) 2012-2014 Matthäus Kiem
 
-This program is free software; you can redistribute it and/or modify it
-under the terms of either: the GNU General Public License as published
-by the Free Software Foundation; or the Artistic License.
+This program is free software; you
+can redistribute it and/or modify it under the same terms
+as Perl 5.10.0.
 
 See http://dev.perl.org/licenses/ for more information.
+
+This program is distributed in the hope that it will be
+useful, but without any warranty; without even the implied
+warranty of merchantability or fitness for a particular purpose.

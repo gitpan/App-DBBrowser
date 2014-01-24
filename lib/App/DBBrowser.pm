@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.010';
+our $VERSION = '0.011';
 
 
 1;
@@ -21,7 +21,7 @@ App::DBBrowser - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.010
+Version 0.011
 
 =head1 SYNOPSIS
 
@@ -65,6 +65,11 @@ Matthäus Kiem <cuer2s@gmail.com>
 
 Copyright (C) 2012-2014 Matthäus Kiem.
 
-This is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
+This program is free software; you can redistribute it and/or modify it under the same terms as Perl 5.10.0.
+
+See http://dev.perl.org/licenses/ for more information.
+
+This program is distributed in the hope that it will be useful, but without any warranty; without even the implied
+warranty of merchantability or fitness for a particular purpose.
 
 =cut

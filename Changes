@@ -1,6 +1,12 @@
 Revision history for App-DBBrowser
 
 
+0.011   2014-01-24
+        - The "mouse mode" is now already effective in the "option" menu.
+        - Option "login": removed the choice "for every connection".
+        - Update license.
+        - Update documentation.
+
 0.010   2014-01-20
         - Removed experimental typecast (Pg - aggregate).
         - Keep track of the terminal width instead of using "SIGWINCH".
