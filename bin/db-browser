@@ -4,7 +4,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.011';
+our $VERSION = '0.012';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -15,16 +15,45 @@ use List::Util            qw(sum);
 use Pod::Usage            qw(pod2usage);
 use Scalar::Util          qw(looks_like_number);
 
-use Clone             qw(clone);
-use DBI               qw();
-use JSON::XS          qw();
-use File::HomeDir     qw(my_home);
-use List::MoreUtils   qw(any first_index pairwise);
-use Term::Choose      qw(choose);
-use Term::ProgressBar qw();
-use Term::ReadKey     qw(GetTerminalSize ReadKey ReadMode);
-use Text::LineFold    qw();
-use Unicode::GCString qw();
+use Clone               qw(clone);
+use DBI                 qw();
+use JSON::XS            qw();
+use File::HomeDir       qw(my_home);
+use List::MoreUtils     qw(any first_index pairwise);
+use Term::ReadKey       qw(ReadKey ReadMode GetTerminalSize);
+use Term::ProgressBar   qw();
+use Text::LineFold      qw();
+use Unicode::GCString   qw();
+
+BEGIN {
+    my $encoding_out;
+    if ( $^O eq 'MSWin32' ) {
+        require Term::Choose::Win32;
+        Term::Choose::Win32::->import( 'choose' );
+        require Term::Size::Win32;
+        Term::Size::Win32::->import( 'chars' );
+        require Win32::Console;
+        $encoding_out = 'cp' . Win32::Console::OutputCP();
+        require Win32::Console::ANSI;
+    }
+    else {
+        require Term::Choose;
+        Term::Choose::->import( 'choose' );
+        $encoding_out = 'utf-8';
+    }
+    binmode STDOUT, ":encoding( $encoding_out )";
+}
+
+sub term_size {
+    if ( $^O eq 'MSWin32' ) {
+        my ( $width, $heigth ) = chars();
+        return $width - 1, $heigth;
+    }
+    else {
+        return GetTerminalSize();
+    }
+}
+
 
 END { ReadMode 0 }
 
@@ -184,7 +213,9 @@ for my $lyt ( grep { /^lyt_/ } keys %$info ) {
     $info->{$lyt}{mouse} = $opt->{menu}{mouse}[v];
 }
 $info->{ok} = '<OK>' if $opt->{menu}{sssc_mode}[v];
-my $sqlite_search = $opt->{SQLite}{reset_cache}[v] ? 1 : 0;
+my $sqlite_search = 0;
+$sqlite_search = 1 if $opt->{SQLite}{reset_cache}[v];
+$sqlite_search = 1 if @ARGV;
 
 
 DB_DRIVER: while ( 1 ) {
@@ -655,7 +686,7 @@ sub get_tables_info {
 sub print_tables_info {
     my ( $ref ) = @_;
     my $len_key = 10;
-    my $col_max = ( GetTerminalSize )[0] - 1;
+    my $col_max = ( term_size() )[0] - 1;
     my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
     $line_fold->config( 'ColMax', $col_max > 140 ? 140 : $col_max );
     my $ch_info = [ 'Close with ENTER' ];
@@ -1978,7 +2009,7 @@ sub trunk_col_to_avail_width {
 
 sub func_print_tbl {
     my ( $info, $opt, $db, $a_ref ) = @_;
-    my ( $term_width ) = GetTerminalSize;
+    my ( $term_width ) = term_size();
     my $show_progress = 0;
     if ( defined $opt->{print}{progress_bar}[v] ) {
         say 'Computing: ...';
@@ -2011,11 +2042,11 @@ sub func_print_tbl {
         my $gcs = Unicode::GCString->new( $separator );
         my $length_sep = $gcs->columns;
         my $old_row = 0;
-        my ( $width ) = GetTerminalSize;
+        my ( $width ) = term_size();
 
         while ( 1 ) {
-            if ( ( GetTerminalSize )[0] != $width ) {
-                ( $width ) = GetTerminalSize;
+            if ( ( term_size() )[0] != $width ) {
+                ( $width ) = term_size();
                 func_print_tbl( $info, $opt, $db, $a_ref );
                 return;
             }
@@ -2030,7 +2061,7 @@ sub func_print_tbl {
                 next;
             }
             $old_row = $row;
-            my ( $term_width ) = GetTerminalSize;
+            my ( $term_width ) = term_size();
             $length_key = int( $term_width / 100 * 33 ) if $length_key > int( $term_width / 100 * 33 );
             my $col_max = $term_width - ( $length_key + $length_sep + 1 );
             my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
@@ -2110,7 +2141,7 @@ sub options {
             };
             my $keys = [ $bin, $app_dir ];
             my $len_key = 7;
-            print_hash( $info, $path, $keys, $len_key, ( GetTerminalSize )[0] );
+            print_hash( $info, $path, $keys, $len_key, ( term_size() )[0] );
         }
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
             my $max = 99;
@@ -2488,21 +2519,17 @@ sub print_hash {
 sub local_readline {
     my ( $info, $args ) = @_;
     my $str = '';
+    local $| = 1;
     local_readline_print( $info, $args, $str );
-    ReadMode 4;
+    ReadMode 'cbreak';
     while ( 1 ) {
         my $key = ReadKey;
         return if ! defined $key;
-        if ( $key eq "\cC" ) {
-            print "\n";
-            say "^C";
-            exit 1;
-        }
-        elsif ( $key eq "\cD" ) {
+        if ( $key eq "\cD" ) {
             print "\n";
             return;
         }
-        elsif ( $key eq "\n" ) {
+        elsif ( $key eq "\n" or $key eq "\r" ) {
             print "\n";
             return $str;
         }
@@ -2529,7 +2556,7 @@ sub local_readline_print {
     if ( defined $args->{status} ) {
         my $line_fold = Text::LineFold->new(
             %{$info->{line_fold}},
-            ColMax => ( GetTerminalSize )[0],
+            ColMax => ( term_size() )[0],
         );
         print $line_fold->fold( '', ' ' x 4, $args->{status} );
     }
@@ -2599,7 +2626,7 @@ sub choose_a_number {
     }
     my $confirm = sprintf "%-*s", $longest * 2 + $length_tab, $info->{confirm};
     my $back    = sprintf "%-*s", $longest * 2 + $length_tab, $info->{back};
-    my ( $term_width ) = GetTerminalSize;
+    my ( $term_width ) = term_size();
     my $gcs_longest_range = Unicode::GCString->new( $choices_range[0] );
     if ( $gcs_longest_range->columns > $term_width ) {
         @choices_range = ();
@@ -2839,7 +2866,7 @@ sub get_db_handle {
         $dbh->sqlite_create_function( 'truncate', 2, sub {
                 my ( $number, $places ) = @_;
                 return if ! defined $number;
-                # return $number if ! looks_like_number( $number );
+                return $number if ! looks_like_number( $number );
                 return sprintf( "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places );
             }
         );
@@ -2969,7 +2996,7 @@ sub get_schema_names {
         return $schemas;
     }
 
-    else { # 'mysql'
+    else {
         return [ $db ];
     }
 }
@@ -3033,7 +3060,7 @@ sub column_names_and_types {
                         FROM information_schema.columns
                         WHERE table_schema = ?";
         }
-        else { # 'Pg'
+        else {
             $stmt = "SELECT table_name, column_name, data_type
                         FROM information_schema.columns
                         WHERE table_schema = ?";
@@ -3222,7 +3249,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.011
+Version 0.012
 
 =cut
 

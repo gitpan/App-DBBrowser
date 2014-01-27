@@ -1,8 +1,49 @@
 use 5.010001;
 use warnings;
 use strict;
-
+use File::Find;
 use Test::More;
-use Test::Prereq;
+use Perl::PrereqScanner;
 
-prereq_ok();
+
+my %prereqs_make;
+open my $fh_m, '<', 'Makefile.PL' or die $!;
+while ( my $line = <$fh_m> ) {
+    if ( $line =~ /^\s*'([^']+)'\s+=>\s+0,/ ) {
+        $prereqs_make{$1} = $1;
+    }
+
+}
+close $fh_m or die $!;
+
+
+my @files;
+for my $dir ( 'bin', 'lib', 't' ) {
+    find( {
+        wanted => sub {
+            my $file = $File::Find::name;
+            return if ! -f $file;
+            push @files, $file;
+        },
+        no_chdir => 1,
+    }, $dir );
+}
+my %modules;
+for my $file ( @files ) {
+    my $scanner = Perl::PrereqScanner->new;
+    my $prereqs = $scanner->scan_file( $file );
+    for my $module ( keys %{$prereqs->{requirements}} ) {
+        next if $module =~ /^\p{Lowercase}/;
+        next if $module =~ /^App::DBBrowser::/;
+        $modules{$module} = $module;
+    }
+}
+
+
+for my $module ( sort keys %modules ) {
+    is( $prereqs_make{$module}, $modules{$module}, ( $prereqs_make{$module} // 'make_undef' ) . ' : ' .  ( $modules{$module} // 'module_undef' ) );
+}
+
+cmp_ok( keys %modules, '==', keys %prereqs_make, 'keys %modules == keys %prereqs_make' );
+
+done_testing();

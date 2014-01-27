@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.011';
+our $VERSION = '0.012';
 
 
 1;
@@ -21,7 +21,7 @@ App::DBBrowser - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.011
+Version 0.012
 
 =head1 SYNOPSIS
 
@@ -49,11 +49,15 @@ For further information see L<db-browser>.
 
 =head1 REQUIREMENTS
 
-The C<db-browser> does not work on MS Windows OS.
-
 It is required Perl version 5.10.1 or greater.
 
-The C<db-browser> expects an C<UTF-8> environment.
+The C<db-browser> assumes C<UTF-8> as the console output encoding except for C<MSWin32 OS>
+
+where the output encoding is detected automatically.
+
+But it is recommended also for C<MSWin32 OS> to work with an C<UTF> encoding
+
+since non mappable characters might break the output.
 
 See also the requirements mentioned in L<Term::Choose> which itself is required by the C<db-browser>.
 

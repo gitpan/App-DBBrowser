@@ -1,6 +1,10 @@
 Revision history for App-DBBrowser
 
 
+0.012   2014-01-27
+        - "SQLite" is selected if @ARGV.
+        - Added support for MSWin32 OS.
+
 0.011   2014-01-24
         - The "mouse mode" is now already effective in the "option" menu.
         - Option "login": removed the choice "for every connection".
