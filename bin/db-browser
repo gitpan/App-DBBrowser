@@ -4,7 +4,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.012';
+our $VERSION = '0.013';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -256,18 +256,23 @@ DB_DRIVER: while ( 1 ) {
         print_error_message( "no $db_driver-databases found\n" );
         next DB_DRIVER;
     }
-    if ( $opt->{sql}{system_info}[v] ) {
-        my $system_databases = system_databases( $db_driver );
-        my @system;
-        for my $system_db ( @$system_databases ) {
-            my $i = first_index{ $_ eq $system_db } @$databases;
-            push @system, splice( @$databases, $i, 1 );
+    my $regexp_system_databases;
+    $regexp_system_databases = regexp_system_databases( $db_driver ) if $opt->{sql}{system_info}[v];
+    if ( defined $regexp_system_databases ) {
+        my ( @data, @system );
+        for my $database ( @{$databases} ) {
+            if ( $database =~ $regexp_system_databases ) {
+                push @system, $database;
+            }
+            else {
+                push @data, $database;
+            }
         }
         if ( $db_driver eq 'SQLite' ) {
-            push @$databases, @system;
+            $databases = [ @data, @system ];
         }
         else {
-            $databases = [ map( "- $_", @$databases ), map( "  $_", @system ) ];
+            $databases = [ map( "- $_", @data ), map( "  $_", @system ) ];
         }
     }
     else {
@@ -340,17 +345,16 @@ DB_DRIVER: while ( 1 ) {
                 my $regexp_system_schemas;
                 $regexp_system_schemas = regexp_system_schemas( $db_driver ) if $opt->{sql}{system_info}[v];
                 if ( defined $regexp_system_schemas ) {
-                    my @system;
-                    my @normal;
+                    my ( @data, @system );
                     for my $schema ( @{$data->{$db}{schemas}} ) {
                         if ( $schema =~ $regexp_system_schemas ) {
                             push @system, $schema;
                         }
                         else {
-                            push @normal, $schema;
+                            push @data, $schema;
                         }
                     }
-                    $choices = [ undef, map( "- $_", @normal ), map( "  $_", @system ) ];
+                    $choices = [ undef, map( "- $_", @data ), map( "  $_", @system ) ];
                 }
                 else {
                     $choices = [ undef, map( "- $_", @{$data->{$db}{schemas}} ) ];
@@ -392,16 +396,16 @@ DB_DRIVER: while ( 1 ) {
             my $regexp_system_tables;
             $regexp_system_tables = regexp_system_tables( $db_driver ) if $opt->{sql}{system_info}[v];
             if ( defined $regexp_system_tables ) {
-                my @system;
+                my ( @data, @system );
                 for my $table ( @{$data->{$db}{$schema}{tables}} ) {
                     if ( $table =~ $regexp_system_tables ) {
                         push @system, $table;
                     }
                     else {
-                        push @tables, $table;
+                        push @data, $table;
                     }
                 }
-                @tables = ( map( "- $_", @tables ), map( "  $_", @system ) );
+                @tables = ( map( "- $_", @data ), map( "  $_", @system ) );
             }
             else {
                 @tables = map { "- $_" } @{$data->{$db}{$schema}{tables}};
@@ -991,6 +995,7 @@ sub read_table {
                     if ( @{$sql->{quote}{chosen_cols}} ) {
                         $sql->{quote}{chosen_cols} = [];
                         $sql->{print}{chosen_cols} = [];
+                        delete $sql->{backup_in_hidd}{chosen_cols};
                         next COLUMNS;
                     }
                     else {
@@ -1002,7 +1007,7 @@ sub read_table {
                     if ( ! @{$sql->{quote}{chosen_cols}} ) {
                         $sql->{select_type} = '*';
                     }
-                    delete $sql->{backup_in_hidd};
+                    delete $sql->{backup_in_hidd}{chosen_cols};
                     $sql->{print}{hidd} = [];
                     last COLUMNS;
                 }
@@ -1063,6 +1068,7 @@ sub read_table {
                     if ( @{$sql->{quote}{aggr_cols}} ) {
                         $sql->{quote}{aggr_cols} = [];
                         $sql->{print}{aggr_cols} = [];
+                        delete $sql->{backup_in_hidd}{aggr_cols};
                         next AGGREGATE;
                     }
                     else {
@@ -1071,7 +1077,7 @@ sub read_table {
                     }
                 }
                 if ( $aggr eq $info->{ok} ) {
-                    delete $sql->{backup_in_hidd};
+                    delete $sql->{backup_in_hidd}{aggr_cols};
                     if ( ! @{$sql->{quote}{aggr_cols}} && ! @{$sql->{quote}{group_by_cols}} ) {
                         $sql->{select_type} = '*';
                     }
@@ -1247,6 +1253,7 @@ sub read_table {
                         $sql->{quote}{group_by_cols} = [];
                         $sql->{print}{group_by_cols} = [];
                         $col_sep = ' ';
+                        delete $sql->{backup_in_hidd}{group_by_cols};
                         next GROUP_BY;
                     }
                     else {
@@ -1261,6 +1268,7 @@ sub read_table {
                         if ( ! @{$sql->{quote}{aggr_cols}} ) {
                             $sql->{select_type} = '*';
                         }
+                        delete $sql->{backup_in_hidd}{group_by_cols};
                     }
                     last GROUP_BY;
                 }
@@ -1528,7 +1536,7 @@ sub read_table {
         }
         elsif ( $custom eq $customize{'hidden'} ) {
             my @functions = @{$info->{keys_hidd_func_pr}};
-            my $stmt_key;
+            my $stmt_key = '';
             if ( $sql->{select_type} eq '*' ) {
                 @{$sql->{quote}{chosen_cols}} = map { $qt_columns->{$_} } @$pr_columns;
                 @{$sql->{print}{chosen_cols}} = @$pr_columns;
@@ -1537,16 +1545,25 @@ sub read_table {
             elsif ( $sql->{select_type} eq 'chosen_cols' ) {
                 $stmt_key = 'chosen_cols';
             }
-            else {
-                $stmt_key = 'aggr_cols';
+            if ( $stmt_key eq 'chosen_cols' ) {
+                if ( ! $sql->{backup_in_hidd}{print}{$stmt_key} ) {
+                    @{$sql->{backup_in_hidd}{print}{$stmt_key}} = @{$sql->{print}{$stmt_key}};
+                }
             }
-            if ( ! $sql->{backup_in_hidd}{print}{$stmt_key} ) {
-                @{$sql->{backup_in_hidd}{print}{$stmt_key}} = @{$sql->{print}{$stmt_key}};
+            else {
+                if ( @{$sql->{print}{aggr_cols}} && ! $sql->{backup_in_hidd}{print}{aggr_cols} ) {
+                    @{$sql->{backup_in_hidd}{print}{'aggr_cols'}} = @{$sql->{print}{aggr_cols}};
+                }
+                if ( @{$sql->{print}{group_by_cols}} && ! $sql->{backup_in_hidd}{print}{group_by_cols} ) {
+                    @{$sql->{backup_in_hidd}{print}{'group_by_cols'}} = @{$sql->{print}{group_by_cols}};
+                }
             }
             my $changed = 0;
 
             HIDDEN: while ( 1 ) {
-                my @cols = @{$sql->{print}{$stmt_key}};
+                my @cols = $stmt_key eq 'chosen_cols'
+                    ? ( @{$sql->{print}{$stmt_key}}                                  )
+                    : ( @{$sql->{print}{aggr_cols}}, @{$sql->{print}{group_by_cols}} );
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 my @pre = ( undef, $info->{_confirm} );
                 my $choices = [ @pre, map( "- $_", @cols ) ];
@@ -1572,10 +1589,19 @@ sub read_table {
                     $sql->{select_type} = $stmt_key if $sql->{select_type} eq '*';
                     last HIDDEN;
                 }
-                $i -= @pre;
                 $print_col =~ s/^\-\s//;
+                $i -= @pre;
+                if ( $stmt_key ne 'chosen_cols' ) {
+                    if ( $i - @{$sql->{print}{aggr_cols}} >= 0 ) {
+                        $i -= @{$sql->{print}{aggr_cols}};
+                        $stmt_key = 'group_by_cols';
+                    }
+                    else {
+                        $stmt_key = 'aggr_cols';
+                    }
+                }
                 if ( $sql->{print}{$stmt_key}[$i] ne $sql->{backup_in_hidd}{print}{$stmt_key}[$i] ) {
-                    if ( $stmt_key eq 'chosen_cols' ) {
+                    if ( $stmt_key ne 'aggr_cols' ) {
                         my $i = first_index { $sql->{print}{$stmt_key}[$i] eq $_ } @{$sql->{print}{hidd}};
                         splice( @{$sql->{print}{hidd}}, $i, 1 );
                     }
@@ -1600,13 +1626,19 @@ sub read_table {
                     next HIDDEN;
                 }
                 $print_hidd = unambiguous_key( $print_hidd, $pr_columns );
+                if ( $stmt_key eq 'group_by_cols' ) {
+                    $sql->{quote}{$stmt_key}[$i] = $quote_hidd;
+                    $sql->{quote}{group_by_stmt} = " GROUP BY " . join( ', ', @{$sql->{quote}{$stmt_key}} );
+                    $sql->{print}{group_by_stmt} = " GROUP BY " . join( ', ', @{$sql->{print}{$stmt_key}} );
+                }
                 $sql->{quote}{$stmt_key}[$i] = $quote_hidd . ' AS ' . $dbh->quote_identifier( $print_hidd );
                 $sql->{print}{$stmt_key}[$i] = $print_hidd;
                 $qt_columns->{$print_hidd} = $quote_hidd;
-                if ( $stmt_key eq 'chosen_cols' ) { # WHERE: aggregate functions are not allowed
+                if ( $stmt_key ne 'aggr_cols' ) { # WHERE: aggregate functions are not allowed
                     push @{$sql->{print}{hidd}}, $print_hidd;
                 }
                 $changed++;
+                next HIDDEN;
             }
         }
         elsif( $custom eq $customize{'print_table'} ) {
@@ -2872,7 +2904,6 @@ sub get_db_handle {
         );
         $dbh->sqlite_create_function( 'bit_length', 1, sub {
                 my ( $string ) = @_;
-                #return length( Encode::encode_utf8( $string ) );
                 use bytes;
                 return length( $string );
             }
@@ -2968,10 +2999,10 @@ sub available_databases {
     return $databases;
 }
 
-sub system_databases {
+sub regexp_system_databases {
     my ( $db_driver ) = @_;
-    return [ qw( mysql information_schema performance_schema ) ] if $db_driver eq 'mysql';
-    return [ qw( postgres template0 template1 ) ]                if $db_driver eq 'Pg';
+    return qr/^(?:mysql|information_schema|performance_schema)\z/ if $db_driver eq 'mysql';
+    return qr/^(?:postgres|template0|template1)\z/                if $db_driver eq 'Pg';
     return;
 }
 
@@ -3187,11 +3218,10 @@ sub col_functions {
     if ( $func =~ /^Epoch_to_Date(?:Time)?\z/ ) {
         my $prompt = print_select_statement( $info, $sql, $table, "$print_f\nInterval:" );
         my ( $microseconds, $milliseconds, $seconds ) = (
-            '  0000000000000000   Micro-Second',
-            '  0000000000000      Milli-Second',
-            '  0000000000               Second' );
-        my $choices = [ $microseconds, $milliseconds, $seconds ];
-        unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
+            '  ****************   Micro-Second',
+            '  *************      Milli-Second',
+            '  **********               Second' );
+        my $choices = [ undef, $microseconds, $milliseconds, $seconds ];
         # Choose
         my $interval = choose( $choices, { prompt => $prompt, %{$info->{lyt_stmt_v}} } );
         return if ! defined $interval;
@@ -3211,8 +3241,7 @@ sub col_functions {
     }
     elsif ( $func eq 'Truncate' ) {
         my $prompt = print_select_statement( $info, $sql, $table, "TRUNC $print_col\nDecimal places:" );
-        my $choices = [ 0 .. 9 ];
-        unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
+        my $choices = [ undef, 0 .. 9 ];
         my $precision = choose( $choices, { prompt => $prompt, %{$info->{lyt_stmt_h}} } );
         return if ! defined $precision;
         if ( $db_driver eq 'Pg' ) {
@@ -3249,7 +3278,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.012
+Version 0.013
 
 =cut
 

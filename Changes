@@ -1,6 +1,9 @@
 Revision history for App-DBBrowser
 
 
+0.013   2014-01-28
+        - Scalar functions applicable also to "GROUP BY" columns.
+
 0.012   2014-01-27
         - "SQLite" is selected if @ARGV.
         - Added support for MSWin32 OS.
