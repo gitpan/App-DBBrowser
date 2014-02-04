@@ -9,7 +9,6 @@ if ( $^O eq 'MSWin32' ) {
     %prereqs_in_cpan_os_specific = (
         'Term::Choose::Win32'  => 0,
         'Term::Size::Win32'    => 0,
-        'Win32::Console'       => 0,
         'Win32::Console::ANSI' => 0,
     );
 }
@@ -45,6 +44,7 @@ WriteMakefile(
         'Clone'                 => 0,
         'DBI'                   => 0,
         'Encode'                => 0,
+        'Encode::Locale'        => 0,
         'File::Basename'        => 0,
         'File::Find'            => 0,
         'File::HomeDir'         => 0,

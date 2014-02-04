@@ -1,6 +1,12 @@
 Revision history for App-DBBrowser
 
 
+0.014   2014-02-04
+        - Detect encodings.
+        - Refactoring system/meta filter.
+        - Added LICENSE file.
+        - Improved documentation.
+
 0.013   2014-01-28
         - Scalar functions applicable also to "GROUP BY" columns.
 

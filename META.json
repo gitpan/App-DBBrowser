@@ -30,6 +30,7 @@
             "Clone" : "0",
             "DBI" : "0",
             "Encode" : "0",
+            "Encode::Locale" : "0",
             "File::Basename" : "0",
             "File::Find" : "0",
             "File::HomeDir" : "0",
@@ -57,5 +58,5 @@
          "web" : "https://github.com/kuerbis/App-DBBrowser"
       }
    },
-   "version" : "0.013"
+   "version" : "0.014"
 }

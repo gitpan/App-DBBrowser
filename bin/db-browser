@@ -1,12 +1,14 @@
 #!/usr/bin/env perl
+use warnings;
 use strict;
 use 5.10.1;
-use open qw(:std :utf8);
+use utf8;
+use open qw(:utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.013';
+our $VERSION = '0.014';
 
-use Encode                qw(encode_utf8 decode_utf8);
+use Encode                qw(encode decode);
 use File::Basename        qw(basename);
 use File::Find            qw(find);
 use File::Spec::Functions qw(catfile catdir rel2abs);
@@ -17,6 +19,7 @@ use Scalar::Util          qw(looks_like_number);
 
 use Clone               qw(clone);
 use DBI                 qw();
+use Encode::Locale      qw(decode_argv);
 use JSON::XS            qw();
 use File::HomeDir       qw(my_home);
 use List::MoreUtils     qw(any first_index pairwise);
@@ -25,23 +28,23 @@ use Term::ProgressBar   qw();
 use Text::LineFold      qw();
 use Unicode::GCString   qw();
 
+binmode STDIN,  ':encoding(console_in)';
+binmode STDOUT, ':encoding(console_out)';
+binmode STDERR, ':encoding(console_out)';
+
 BEGIN {
-    my $encoding_out;
+    decode_argv(); # not at the end of the BEGIN block if perl < 5.16.0
     if ( $^O eq 'MSWin32' ) {
         require Term::Choose::Win32;
         Term::Choose::Win32::->import( 'choose' );
         require Term::Size::Win32;
         Term::Size::Win32::->import( 'chars' );
-        require Win32::Console;
-        $encoding_out = 'cp' . Win32::Console::OutputCP();
         require Win32::Console::ANSI;
     }
     else {
         require Term::Choose;
         Term::Choose::->import( 'choose' );
-        $encoding_out = 'utf-8';
     }
-    binmode STDOUT, ":encoding( $encoding_out )";
 }
 
 sub term_size {
@@ -68,13 +71,13 @@ use constant {
 };
 
 
-my $home = File::HomeDir->my_home();
+my $home = decode( 'locale', File::HomeDir->my_home() );
 if ( ! $home ) {
     say "'File::HomeDir->my_home()' could not find the home directory!";
     say "A home directory is needed to be able to use 'db-browser'";
     exit;
 }
-my $my_data = File::HomeDir->my_data();
+my $my_data = decode( 'locale', File::HomeDir->my_data() );
 my $app_dir = $my_data ? catdir( $my_data, 'db_browser_conf' ) : catdir( $home, '.db_browser_conf' );
 mkdir $app_dir or die $! if ! -d $app_dir;
 
@@ -88,7 +91,6 @@ my $info = {
     lyt_3             => { layout => 3,             justify => 0, clear_screen => 1, undef => '  BACK'              },
     lyt_stmt_v        => { layout => 3,             justify => 0, clear_screen => 1, undef => '  BACK', lf => [0,4] },
     lyt_stop          => {                                        clear_screen => 0                                 },
-    line_fold         => { Charset=> 'utf8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
     back              => 'BACK',
     confirm           => 'CONFIRM',
     ok                => '- OK -',
@@ -99,12 +101,14 @@ my $info = {
     _continue         => '  CONTINUE',
     _info             => '  INFO',
     _reset            => '  RESET',
+    line_fold         => { Charset=> 'utf8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
+    avail_aggregate   => [ "AVG(X)", "COUNT(X)", "COUNT(*)", "MAX(X)", "MIN(X)", "SUM(X)" ],
     cached            => '',
     binary_string     => 'BNRY',
-    avail_aggregate   => [ "AVG(X)", "COUNT(X)", "COUNT(*)", "MAX(X)", "MIN(X)", "SUM(X)" ],
-    avail_operators   => [ "REGEXP", "NOT REGEXP", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL", "IN", "NOT IN", "BETWEEN", "NOT BETWEEN",
-                           " = ", " != ", " <> ", " < ", " > ", " >= ", " <= ", "LIKE col", "NOT LIKE col", "LIKE %col%", "NOT LIKE %col%",
-                           " = col", " != col", " <> col", " < col", " > col", " >= col", " <= col" ],
+    avail_operators   => [ "REGEXP", "NOT REGEXP", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL", "IN", "NOT IN",
+                           "BETWEEN", "NOT BETWEEN", " = ", " != ", " <> ", " < ", " > ", " >= ", " <= ", "LIKE col",
+                           "NOT LIKE col", "LIKE %col%", "NOT LIKE %col%", " = col", " != col", " <> col", " < col",
+                           " > col", " >= col", " <= col" ],
                            # "LIKE col%", "NOT LIKE col%", "LIKE %col", "NOT LIKE %col",
     avail_db_drivers  => [ 'SQLite', 'mysql', 'Pg' ],
     hidd_func_pr      => { Epoch_to_Date => 'DATE', Truncate => 'TRUNC', Epoch_to_DateTime => 'DATETIME',
@@ -149,8 +153,8 @@ my $defaults = {
     },
     SQLite => {
         reset_cache         => [ 0,  '- New Search' ],
-        unicode             => [ 1,  '- Unicode' ],
-        see_if_its_a_number => [ 1,  '- See if its a number' ],
+        sqlite_unicode             => [ 1,  '- Unicode' ],
+        sqlite_see_if_its_a_number => [ 1,  '- See if its a number' ],
         binary_filter       => [ 0,  '- Binary Filter' ],
     },
     mysql => {
@@ -175,7 +179,7 @@ $info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case parentheses )
 $info->{dbs}{keys}       = [ qw( login db_defaults ) ];
 $info->{menu}{keys}      = [ qw( thsd_sep db_drivers operators sssc_mode expand  mouse ) ];
 $info->{db_sections}     = [ qw( SQLite mysql Pg ) ];
-$info->{SQLite}{keys}    = [ qw( reset_cache unicode see_if_its_a_number binary_filter ) ];
+$info->{SQLite}{keys}    = [ qw( reset_cache sqlite_unicode sqlite_see_if_its_a_number binary_filter ) ];
 $info->{mysql}{keys}     = [ qw( default_user mysql_enable_utf8 binary_filter host port ) ];
 $info->{Pg}{keys}        = [ qw( default_user pg_enable_utf8 binary_filter host port ) ];
 
@@ -256,12 +260,13 @@ DB_DRIVER: while ( 1 ) {
         print_error_message( "no $db_driver-databases found\n" );
         next DB_DRIVER;
     }
-    my $regexp_system_databases;
-    $regexp_system_databases = regexp_system_databases( $db_driver ) if $opt->{sql}{system_info}[v];
-    if ( defined $regexp_system_databases ) {
+    my $regexp_system;
+    $regexp_system = regexp_system( $db_driver, 'database' ) if $opt->{sql}{system_info}[v];
+    if ( defined $regexp_system ) {
+        my $regexp = join( '|', @$regexp_system );
         my ( @data, @system );
         for my $database ( @{$databases} ) {
-            if ( $database =~ $regexp_system_databases ) {
+            if ( $database =~ /(?:$regexp)/ ) {
                 push @system, $database;
             }
             else {
@@ -342,12 +347,13 @@ DB_DRIVER: while ( 1 ) {
             elsif ( @{$data->{$db}{schemas}} > 1 ) {
                 my $choices;
                 my $idx_sch;
-                my $regexp_system_schemas;
-                $regexp_system_schemas = regexp_system_schemas( $db_driver ) if $opt->{sql}{system_info}[v];
-                if ( defined $regexp_system_schemas ) {
+                my $regexp_system;
+                $regexp_system = regexp_system( $db_driver, 'schema' ) if $opt->{sql}{system_info}[v];
+                if ( defined $regexp_system ) {
+                    my $regexp = join( '|', @$regexp_system );
                     my ( @data, @system );
                     for my $schema ( @{$data->{$db}{schemas}} ) {
-                        if ( $schema =~ $regexp_system_schemas ) {
+                        if ( $schema =~ /(?:$regexp)/ ) {
                             push @system, $schema;
                         }
                         else {
@@ -359,10 +365,11 @@ DB_DRIVER: while ( 1 ) {
                 else {
                     $choices = [ undef, map( "- $_", @{$data->{$db}{schemas}} ) ];
                 }
+                my $prompt = 'DB "'. basename( $db ) . '" - choose Schema:';
                 # Choose
                 $idx_sch = choose(
                     $choices,
-                    { prompt => 'DB "'. basename( $db ) . '" - choose Schema:', %{$info->{lyt_3}}, index => 1, default => $old_idx_sch }
+                    { prompt => $prompt, %{$info->{lyt_3}}, index => 1, default => $old_idx_sch }
                 );
                 $schema = $choices->[$idx_sch] if defined $idx_sch;
                 next DATABASE if ! defined $schema;
@@ -393,12 +400,13 @@ DB_DRIVER: while ( 1 ) {
             my $union      = '  Union';
             my $db_setting = '  Database settings';
             my @tables = ();
-            my $regexp_system_tables;
-            $regexp_system_tables = regexp_system_tables( $db_driver ) if $opt->{sql}{system_info}[v];
-            if ( defined $regexp_system_tables ) {
+            my $regexp_system;
+            $regexp_system = regexp_system( $db_driver, 'table' ) if $opt->{sql}{system_info}[v];
+            if ( defined $regexp_system ) {
+                my $regexp = join( '|', @$regexp_system );
                 my ( @data, @system );
                 for my $table ( @{$data->{$db}{$schema}{tables}} ) {
-                    if ( $table =~ $regexp_system_tables ) {
+                    if ( $table =~ /(?:$regexp)/ ) {
                         push @system, $table;
                     }
                     else {
@@ -504,7 +512,8 @@ DB_DRIVER: while ( 1 ) {
                     }
 
                     PRINT_TABLE: while ( 1 ) {
-                        my ( $all_arrayref ) = read_table( $info, $opt, $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns );
+                        my $all_arrayref = read_table( $info, $opt, $sql, $dbh, $table,
+                                                       $select_from_stmt, $qt_columns, $pr_columns );
                         last PRINT_TABLE if ! defined $all_arrayref;
                         delete @{$info}{qw(width_head width_cols not_a_number)};
                         func_print_tbl( $info, $opt, $db, $all_arrayref );
@@ -627,7 +636,8 @@ sub union_tables {
     my $c;
     for my $table ( @{$union->{used_tables}} ) {
         $c++;
-        $union->{quote}{stmt} .= " SELECT " . join( ', ', map { $dbh->quote_identifier( $_ ) } @{$union->{used_cols}{$table}} );
+        $union->{quote}{stmt} .= " SELECT ";
+        $union->{quote}{stmt} .= join( ', ', map { $dbh->quote_identifier( $_ ) } @{$union->{used_cols}{$table}} );
         $union->{quote}{stmt} .= " FROM " . $dbh->quote_identifier( undef, $schema, $table );
         $union->{quote}{stmt} .= $c < @{$union->{used_tables}} ? " UNION ALL " : " )";
     }
@@ -1878,7 +1888,8 @@ sub calc_col_width {
     if ( defined $info->{width_head} && defined $info->{width_cols} && defined $info->{not_a_number} ) {
         return @{$info}{qw(width_head width_cols not_a_number)};
     }
-    my $binary_filter = $opt->{$info->{db_driver} . '_' . $db}{binary_filter}[v] // $opt->{$info->{db_driver}}{binary_filter}[v];
+    my $binary_filter =    $opt->{$info->{db_driver} . '_' . $db}{binary_filter}[v]
+                        // $opt->{$info->{db_driver}}{binary_filter}[v];
     my $gcs_bnry = Unicode::GCString->new( $info->{binary_string} );
     my $binary_length = $gcs_bnry->columns;
     my $binray_regexp = qr/[\x00-\x08\x0B-\x0C\x0E-\x1F]/;
@@ -2453,12 +2464,12 @@ sub database_setting {
             return;
         }
         if ( $db_driver eq 'SQLite' ) {
-            if ( $option eq $opt->{"SQLite"}{unicode}[chs] ) {
-                my ( $key, $prompt ) = ( 'unicode', 'Unicode' );
+            if ( $option eq $opt->{"SQLite"}{sqlite_unicode}[chs] ) {
+                my ( $key, $prompt ) = ( 'sqlite_unicode', 'Unicode' );
                 opt_yes_no( $info, $opt, $section, $key, $prompt );
             }
-            elsif ( $option eq $opt->{"SQLite"}{see_if_its_a_number}[chs] ) {
-                my ( $key, $prompt ) = ( 'see_if_its_a_number', 'See if its a number' );
+            elsif ( $option eq $opt->{"SQLite"}{sqlite_see_if_its_a_number}[chs] ) {
+                my ( $key, $prompt ) = ( 'sqlite_see_if_its_a_number', 'See if its a number' );
                 opt_yes_no( $info, $opt, $section, $key, $prompt );
             }
             elsif ( $option eq $opt->{"SQLite"}{binary_filter}[chs] ) {
@@ -2623,7 +2634,7 @@ sub read_config_file {
 sub write_json {
     my ( $file, $h_ref ) = @_;
     my $json = JSON::XS->new->pretty->encode( $h_ref );
-    open my $fh, '>', encode_utf8( $file ) or die $!;
+    open my $fh, '>', encode( 'locale_fs', $file ) or die $!;
     print $fh $json;
     close $fh;
 }
@@ -2631,8 +2642,8 @@ sub write_json {
 
 sub read_json {
     my ( $file ) = @_;
-    return {} if ! -f encode_utf8( $file );
-    open my $fh, '<', encode_utf8( $file ) or die $!;
+    return {} if ! -f encode( 'locale_fs', $file );
+    open my $fh, '<', encode( 'locale_fs', $file ) or die $!;
     my $json = do { local $/; <$fh> };
     close $fh;
     my $h_ref = JSON::XS->new->pretty->decode( $json ) if $json;
@@ -2856,7 +2867,7 @@ sub get_credentials {
 }
 
 
-###########################################   database specific subroutines   ############################################
+########################################   database specific subroutines   #############################################
 
 
 sub get_db_handle {
@@ -2864,16 +2875,21 @@ sub get_db_handle {
     my $db_driver = $info->{db_driver};
     my $db_key    = $info->{db_driver} . '_' . $db;
     my %db_opt = ();
+    my $option;
     if ( $db_driver eq 'SQLite' ) {
         die "\"$db\": $!. Maybe the cached data is not up to date." if ! -f $db;
-        $db_opt{sqlite_unicode}             = $opt->{$db_key}{unicode}[v]             // $opt->{SQLite}{unicode}[v];
-        $db_opt{sqlite_see_if_its_a_number} = $opt->{$db_key}{see_if_its_a_number}[v] // $opt->{SQLite}{see_if_its_a_number}[v];
+        $option = 'sqlite_unicode';
+        $db_opt{$option} = $opt->{$db_key}{$option}[v] // $opt->{$db_driver}{$option}[v];
+        $option = 'sqlite_see_if_its_a_number';
+        $db_opt{$option} = $opt->{$db_key}{$option}[v] // $opt->{$db_driver}{$option}[v];
     }
     elsif ( $db_driver eq 'mysql' ) {
-        $db_opt{mysql_enable_utf8} = $opt->{$db_key}{mysql_enable_utf8}[v] // $opt->{mysql}{mysql_enable_utf8}[v];
+        $option = 'mysql_enable_utf8';
+        $db_opt{$option} = $opt->{$db_key}{$option}[v] // $opt->{$db_driver}{$option}[v];
     }
     elsif ( $db_driver eq 'Pg' ) {
-        $db_opt{pg_enable_utf8} = $opt->{$db_key}{pg_enable_utf8}[v] // $opt->{Pg}{pg_enable_utf8}[v];
+        $option = 'pg_enable_utf8';
+        $db_opt{$option} = $opt->{$db_key}{$option}[v] // $opt->{$db_driver}{$option}[v];
     }
     my ( $user, $passwd ) = get_credentials( $info, $opt, $db );
     my $dsn = 'dbi:' . $info->{db_driver} . ':dbname=' . $db;
@@ -2920,9 +2936,11 @@ sub get_db_handle {
 
 sub available_databases {
     my ( $info, $opt ) = @_;
+    my $db_driver   = $info->{db_driver};
+    my $system_info = $opt->{sql}{system_info}[v];
     my $databases = [];
-    if ( $info->{db_driver} eq 'SQLite' ) {
-        my @dirs = map { decode_utf8( $_ ) } @ARGV ? @ARGV : ( $info->{home} );
+    if ( $db_driver eq 'SQLite' ) {
+        my @dirs = @ARGV ? @ARGV : ( $info->{home} );
         my $c_dirs = join ' ', @dirs;
         $info->{cache} = read_json( $info->{db_cache_file} );
         if ( $opt->{SQLite}{reset_cache}[v] ) {
@@ -2952,7 +2970,7 @@ sub available_databases {
                             open my $fh, '<:raw', $file or die "$file: $!";
                             defined( read $fh, my $string, 13 ) or die "$file: $!";
                             close $fh;
-                            push @$databases, decode_utf8( $file ) if $string eq 'SQLite format';
+                            push @$databases, decode( 'loacale_fs', $file ) if $string eq 'SQLite format';
                             1 }
                         ) {
                             utf8::decode( $@ );
@@ -2961,69 +2979,78 @@ sub available_databases {
                     },
                     no_chdir   => 1,
                 },
-                encode_utf8( $dir ) );
+                encode( 'locale_fs', $dir ) );
             }
             $info->{cache}{$c_dirs} = $databases;
             write_json( $info->{db_cache_file}, $info->{cache} );
             say 'Ended searching';
         }
     }
-    elsif( $info->{db_driver} eq 'Pg' ) {
+    elsif( $db_driver eq 'Pg' ) {
         my $dbh = get_db_handle( $info, $opt, 'postgres' );
-        my $stmt;
-        if ( ! $opt->{sql}{system_info}[v] ) {
-            $stmt = "SELECT datname FROM pg_database
-                        WHERE datistemplate = false AND datname != 'postgres'
-                        ORDER BY datname";
+        my $regexp = [];
+        my $stmt = "SELECT datname FROM pg_database";
+        if ( ! $system_info ) {
+            $regexp = regexp_system( $db_driver, 'database' );
+            $stmt .= " WHERE " . join( " AND ", ( "datname !~ ?" ) x @$regexp ) if @$regexp;
         }
-        elsif ( $opt->{sql}{system_info}[v] ) {
-            $stmt = "SELECT datname FROM pg_database
-                        ORDER BY datname";
-        }
-        $databases = $dbh->selectcol_arrayref( $stmt, {} );
+        $stmt .= " ORDER BY datname";
+        $databases = $dbh->selectcol_arrayref( $stmt, {}, @$regexp );
     }
-    elsif( $info->{db_driver} eq 'mysql' ) {
+    elsif( $db_driver eq 'mysql' ) {
         my $dbh = get_db_handle( $info, $opt, 'information_schema' );
-        my $stmt;
-        if ( ! $opt->{sql}{system_info}[v] ) {
-            $stmt = "SELECT schema_name FROM information_schema.schemata
-                        WHERE schema_name != 'mysql' AND schema_name != 'information_schema' AND schema_name != 'performance_schema'
-                        ORDER BY schema_name";
+        my $regexp = [];
+        my $stmt = "SELECT schema_name FROM information_schema.schemata";
+        if ( ! $system_info ) {
+            $regexp = regexp_system( $db_driver, 'database' );
+            $stmt .= " WHERE " . join( " AND ", ( "schema_name NOT REGEXP ?" ) x @$regexp ) if @$regexp;
         }
-        elsif ( $opt->{sql}{system_info}[v] ) {
-            $stmt = "SELECT schema_name FROM information_schema.schemata
-                        ORDER BY schema_name";
-        }
-        $databases = $dbh->selectcol_arrayref( $stmt, {} );
+        $stmt .= " ORDER BY schema_name";
+        $databases = $dbh->selectcol_arrayref( $stmt, {}, @$regexp );
     }
     return $databases;
 }
 
-sub regexp_system_databases {
-    my ( $db_driver ) = @_;
-    return qr/^(?:mysql|information_schema|performance_schema)\z/ if $db_driver eq 'mysql';
-    return qr/^(?:postgres|template0|template1)\z/                if $db_driver eq 'Pg';
-    return;
+
+sub regexp_system {
+    my ( $db_driver, $level ) = @_;
+    if ( $db_driver eq 'SQLite' ) {
+        return                if $level eq 'database';
+        return                if $level eq 'schema';
+        return [ '^sqlite_' ] if $level eq 'table';
+    }
+    elsif ( $db_driver eq 'mysql' ) {
+        return [ '^mysql$', '^information_schema$', '^performance_schema$' ] if $level eq 'database';
+        return                                                               if $level eq 'schema';
+        return                                                               if $level eq 'table';
+    }
+    elsif ( $db_driver eq 'Pg' ) {
+        return [ '^postgres$', '^template0$', '^template1$' ] if $level eq 'database';
+        return [ '^pg_', '^information_schema$' ]             if $level eq 'schema';
+        return                                                if $level eq 'table';
+    }
+    else {
+        return;
+    }
 }
 
 
 sub get_schema_names {
     my ( $info, $opt, $dbh, $db ) = @_;
-    if ( $info->{db_driver} eq 'SQLite' ) {
+    my $db_driver   = $info->{db_driver};
+    my $system_info = $opt->{sql}{system_info}[v];
+    if ( $db_driver eq 'SQLite' ) {
         return [ 'main' ];
     }
-    elsif ( $info->{db_driver} eq 'Pg' ) {
-        my $stmt;
-        if ( $opt->{sql}{system_info}[v] ) {
-            $stmt = "SELECT schema_name FROM information_schema.schemata
-                        ORDER BY schema_name";
+    elsif ( $db_driver eq 'Pg' ) {
+        my $regexp = [];
+        my $stmt = "SELECT schema_name FROM information_schema.schemata";
+        if ( ! $system_info ) {
+            $regexp = regexp_system( $db_driver, 'schema' );
+            $stmt .= " WHERE " . join( " AND ", ( "schema_name !~ ?" ) x @$regexp ) if @$regexp;
         }
-        else {
-            $stmt = "SELECT schema_name FROM information_schema.schemata
-                        WHERE schema_name != 'information_schema'AND schema_name !~ '^pg_'
-                        ORDER BY schema_name";
-        }
-        my $schemas = $dbh->selectcol_arrayref( $stmt, {} );
+        $stmt .= " ORDER BY schema_name";
+        my $schemas = $dbh->selectcol_arrayref( $stmt, {}, @$regexp );
         return $schemas;
     }
 
@@ -3032,30 +3059,22 @@ sub get_schema_names {
     }
 }
 
-sub regexp_system_schemas {
-    my ( $db_driver ) = @_;
-    return qr/^(?:pg_|information_schema\z)/ if $db_driver eq 'Pg';
-    return;
-}
-
 
 sub get_table_names {
     my ( $info, $opt, $dbh, $db, $schema ) = @_;
+    my $db_driver   = $info->{db_driver};
+    my $system_info = $opt->{sql}{system_info}[v];
     my $tables   = [];
-    if ( $info->{db_driver} eq 'SQLite' ) {
-        if ( $opt->{sql}{system_info}[v] ) {
-            my $stmt = "SELECT name FROM sqlite_master
-                           WHERE type = 'table'
-                           ORDER BY name";
-            $tables = $dbh->selectcol_arrayref( $stmt );
-            push @$tables, 'sqlite_master';
+    if ( $db_driver eq 'SQLite' ) {
+        my $regexp = [];
+        my $stmt = "SELECT name FROM sqlite_master WHERE type = 'table'";
+        if ( ! $system_info ) {
+            $regexp = regexp_system( $db_driver, 'table' );
+            $stmt .= " AND " . join( " AND ", ( "name NOT REGEXP ?" ) x @$regexp ) if @$regexp;
         }
-        else {
-            my $stmt = "SELECT name FROM sqlite_master
-                           WHERE type = 'table' AND name NOT REGEXP '^sqlite_'
-                           ORDER BY name";
-            $tables = $dbh->selectcol_arrayref( $stmt );
-        }
+        $stmt .= " ORDER BY name";
+        $tables = $dbh->selectcol_arrayref( $stmt, {}, @$regexp );
+        push @$tables, 'sqlite_master' if $system_info;
     }
     else {
         my $stmt = "SELECT table_name FROM information_schema.tables
@@ -3065,13 +3084,6 @@ sub get_table_names {
         $tables = $dbh->selectcol_arrayref( $stmt, {}, ( $schema ) );
     }
     return $tables;
-}
-
-
-sub regexp_system_tables {
-    my ( $db_driver ) = @_;
-    return qr/^sqlite_/i if $db_driver eq 'SQLite';
-    return;
 }
 
 
@@ -3278,7 +3290,7 @@ C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
 =head1 VERSION
 
-Version 0.013
+Version 0.014
 
 =cut
 
@@ -3304,9 +3316,12 @@ C<db-browser> called with C<-s|--search> causes a new search of C<SQLite> databa
 
 Search and read in C<SQLite/MySQL/PostgreSQL> databases.
 
-To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database privileges required for fetching the respective data.
+To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database
+privileges required for fetching the respective data.
 
-The C<db-browser> expects an C<UTF-8> environment and an existing C<home> directory with read and write permissions for the user of C<db-browser>.
+The C<db-browser> expects an existing C<home> directory with read and write permissions for the user of C<db-browser>.
+
+It is recommended to work with an UTF encoding. Non mappable characters might break the output.
 
 It is needed a terminal with a width of at least 40 print columns.
 
@@ -3322,7 +3337,7 @@ To be able to use all the features of the C<db-browser> some basic C<SQL> knowle
 
 =item *
 
-the C<Arrow> keys (or C<hjkl>) to move up and down respectively to move right and left.
+the C<Arrow> keys (or C<hjkl>) to move up and down respective to move right and left.
 
 =item *
 
@@ -3330,7 +3345,8 @@ the C<PageUp> key (or C<Ctrl-B>) to go back one page, the C<PageDown> key (or C<
 
 =item *
 
-the C<Home> key (or C<Ctrl-A>) to jump to the beginning of the menu, the C<End> key (or C<Ctrl-E>) to jump to the end of the menu.
+the C<Home> key (or C<Ctrl-A>) to jump to the beginning of the menu, the C<End> key (or C<Ctrl-E>) to jump to the end
+of the menu.
 
 =item *
 
@@ -3338,7 +3354,8 @@ the C<Enter/Return> key to confirm a chosen menu item.
 
 =back
 
-With the option I<mouse mode> enabled it can be used the mouse with the left mouse key to navigate through the menus instead of the keyboard keys.
+With the option I<mouse mode> enabled it can be used the mouse with the left mouse key to navigate through the menus
+instead of the keyboard keys.
 
 The C<q> key goes back (C<Ctrl-D> instead of C<q> if prompted for a string) in the menu hierarchy.
 
@@ -3374,7 +3391,8 @@ To disable the automatic limit set I<max rows> to C<undef> (--).
 
 =head3 ProgressBar
 
-Set the progress bar threshold. If the number of fields (rows x columns) is higher than the threshold a progress bar is shown while preparing the data for the output.
+Set the progress bar threshold. If the number of fields (rows x columns) is higher than the threshold a progress bar is
+shown while preparing the data for the output.
 
 =head3 DB Drivers
 
@@ -3394,15 +3412,17 @@ Choose the thousands separator displayed in menus.
 
 =head3 Sssc Mode
 
-With the I<Sssc> mode "compat" enabled back-arrows are offered in the C<SQL> "sub-statement" menus. In the "simple" mode it can be used the C<q> key instead of the back-arrows.
+With the I<Sssc> mode "compat" enabled back-arrows are offered in the C<SQL> menus entries. In the "simple" mode it can
+be used the C<q> key instead of the back-arrows.
 
-To reset a C<SQL> "sub-statement" (e.g C<WHERE>) re-enter into the "sub-statement" and choose C<'- OK -'>.
+To reset a C<SQL> "sub-statement" (e.g C<WHERE>) re-enter into the respective menu entry and choose C<'- OK -'>.
 
 =head3 Expand
 
 Set the behavior of different menus.
 
-For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Expand> to "Enchanted" means: save the menu position.
+For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Expand> to "Enchanted" means: save the
+menu position.
 
 For "Print Table" "Enchanted" means: enable printing the chosen table row.
 
@@ -3446,7 +3466,8 @@ If set the I<default user> is used as username for database logins.
 
 =head4 See if it's a number
 
-If set to C<YES> L<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are numbers.
+If set to C<YES> L<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are
+numbers.
 
 See L<DBD::SQLite> for details. This is a C<SQLite>-only option.
 
@@ -3466,14 +3487,41 @@ Printing arbitrary binary data could break the output.
 
 Database defaults can be overwritten for each Database with the "Database settings".
 
+=head1 HINTS
+
+The hints refer to the C<SQL> menu - the menu which opens after a table was selected.
+
+If C<AGGREGATE> or/and C<GROUP BY> is set, the C<SELECT> statement is automatically formed.
+
+Changing the lock mode I<Lk[01]> will also reset the entire C<SQL>.
+
+=head3 Scalar functions
+
+There is a hidden menu entry: selecting the prompt I<Customize:> makes available some scalar functions.
+
+To remove a chosen scalar function from a column select the column with the function a second time.
+
+With C<SQLite> the function C<TRUNCATE> returns stringified values:
+
+- When comparing in C<WHERE> or C<HAVING TO> clauses with a number while C<sqlite_see_if_its_a_number> is enabled
+(default) take the non-truncated (original) value for the comparison.
+
+- Also to get a numeric comparison in an C<ORDER BY> clause use the non-truncated (original) values for the ordering.
+
 =head1 AUTHOR
 
 Matthäus Kiem <cuer2s@gmail.com>
+
+=head1 CREDITS
+
+Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people form
+L<stackoverflow|http://stackoverflow.com> for the help.
 
 =head1 LICENSE AND COPYRIGHT
 
 Copyright 2012-2014 Matthäus Kiem.
 
-This program  is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
+This program is free software; you can redistribute it and/or modify it under the same terms as Perl 5.10.0. For
+details, see the full text of the licenses in the file LICENSE.
 
 =cut

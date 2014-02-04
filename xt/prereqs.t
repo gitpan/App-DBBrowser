@@ -39,8 +39,9 @@ for my $file ( @files ) {
     }
 }
 
+my %all_keys = ( %modules, %prereqs_make );
 
-for my $module ( sort keys %modules ) {
+for my $module ( sort keys %all_keys ) {
     is( $prereqs_make{$module}, $modules{$module}, ( $prereqs_make{$module} // 'make_undef' ) . ' : ' .  ( $modules{$module} // 'module_undef' ) );
 }
 

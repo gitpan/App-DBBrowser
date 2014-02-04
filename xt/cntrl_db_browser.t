@@ -15,7 +15,7 @@ while ( my $line = readline $fh ) {
     if ( $line =~ /^\s*use\s+Data::Dumper/s ) {
         $data_dumper++;
     }
-    if ( $line =~ /^\s*use\s+warnings/s ) {
+    if ( $line =~ /^\s*use\s+warnings\s+FATAL/s ) {
         $warnings++;
     }
 }
