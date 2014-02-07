@@ -2,11 +2,10 @@
 use warnings;
 use strict;
 use 5.10.1;
-use utf8;
 use open qw(:utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.014';
+our $VERSION = '0.015';
 
 use Encode                qw(encode decode);
 use File::Basename        qw(basename);
@@ -152,10 +151,10 @@ my $defaults = {
         db_defaults         => [ 'Dummy', '- DB Defaults' ],
     },
     SQLite => {
-        reset_cache         => [ 0,  '- New Search' ],
-        sqlite_unicode             => [ 1,  '- Unicode' ],
-        sqlite_see_if_its_a_number => [ 1,  '- See if its a number' ],
-        binary_filter       => [ 0,  '- Binary Filter' ],
+        reset_cache                => [ 0, '- New Search' ],
+        sqlite_unicode             => [ 1, '- Unicode' ],
+        sqlite_see_if_its_a_number => [ 1, '- See if its a number' ],
+        binary_filter              => [ 0, '- Binary Filter' ],
     },
     mysql => {
         default_user        => [ '', '- Default User' ],
@@ -2503,8 +2502,19 @@ sub database_setting {
         }
         elsif ( $db_driver eq 'Pg' ) {
             if ( $option eq $opt->{"Pg"}{pg_enable_utf8}[chs] ) {
+                #my ( $key, $prompt ) = ( 'pg_enable_utf8', 'Enable utf8' );
+                #opt_yes_no( $info, $opt, $section, $key, $prompt );
+                my $list = [ 'NO', 'YES' ];
+                my $main;
+                eval {
+                    require DBD::Pg;
+                    $main = ( split /\./, $DBD::Pg::VERSION )[0];
+                };
+                push @$list, 'AUTO' if $main && $main >= 3;
+                $opt->{Pg}{pg_enable_utf8}[v] = 2 if $opt->{Pg}{pg_enable_utf8}[v] == -1;
                 my ( $key, $prompt ) = ( 'pg_enable_utf8', 'Enable utf8' );
-                opt_yes_no( $info, $opt, $section, $key, $prompt );
+                opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
+                $opt->{Pg}{pg_enable_utf8}[v] = -1 if $opt->{Pg}{pg_enable_utf8}[v] == 2;
             }
             elsif ( $option eq $opt->{"Pg"}{default_user}[chs] ) {
                 my ( $key, $prompt ) = ( 'default_user', 'Default user' );
@@ -2970,7 +2980,7 @@ sub available_databases {
                             open my $fh, '<:raw', $file or die "$file: $!";
                             defined( read $fh, my $string, 13 ) or die "$file: $!";
                             close $fh;
-                            push @$databases, decode( 'loacale_fs', $file ) if $string eq 'SQLite format';
+                            push @$databases, decode( 'locale_fs', $file ) if $string eq 'SQLite format';
                             1 }
                         ) {
                             utf8::decode( $@ );
@@ -3286,11 +3296,11 @@ __END__
 
 =head1 NAME
 
-C<db-browser> - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
+C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.014
+Version 0.015
 
 =cut
 
@@ -3308,13 +3318,13 @@ When the C<db-browser> is called with the argument C<-h|--help> it shows a menu 
 
     db-browser [-s|--search] [directories to be searched]
 
-If no directories are passed the home directory is searched for C<SQLite> databases.
+If no directories are passed the home directory is searched for SQLite databases.
 
-C<db-browser> called with C<-s|--search> causes a new search of C<SQLite> databases instead of using the cached data.
+C<db-browser> called with C<-s|--search> causes a new search of SQLite databases instead of using the cached data.
 
 =head1 DESCRIPTION
 
-Search and read in C<SQLite/MySQL/PostgreSQL> databases.
+Search and read in SQLite/MySQL/PostgreSQL databases.
 
 To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database
 privileges required for fetching the respective data.
@@ -3329,7 +3339,7 @@ It is needed a terminal with a width of at least 40 print columns.
 
 The best way to find out how C<db-browser> works is calling C<db-browser>.
 
-To be able to use all the features of the C<db-browser> some basic C<SQL> knowledge is required.
+To be able to use all the features of the C<db-browser> some basic SQL knowledge is required.
 
 =head3 Keys to move around
 
@@ -3383,7 +3393,7 @@ Set the string that will be shown on the screen instead of an undefined field.
 
 =head3 Max Rows
 
-Set the maximum number of fetched table rows. This can be overwritten by setting a C<SQL> C<LIMIT> statement.
+Set the maximum number of fetched table rows. This can be overwritten by setting a SQL LIMIT statement.
 
 The fetched table rows are kept in memory.
 
@@ -3404,7 +3414,7 @@ Choose the needed operators.
 
 =head3 Parentheses
 
-Enable parentheses in C<WHERE> and/or C<HAVING TO> clauses.
+Enable parentheses in WHERE and/or HAVING TO clauses.
 
 =head3 Separator
 
@@ -3412,10 +3422,10 @@ Choose the thousands separator displayed in menus.
 
 =head3 Sssc Mode
 
-With the I<Sssc> mode "compat" enabled back-arrows are offered in the C<SQL> menus entries. In the "simple" mode it can
+With the I<Sssc> mode "compat" enabled back-arrows are offered in the SQL menus entries. In the "simple" mode it can
 be used the C<q> key instead of the back-arrows.
 
-To reset a C<SQL> "sub-statement" (e.g C<WHERE>) re-enter into the respective menu entry and choose C<'- OK -'>.
+To reset a SQL "sub-statement" (e.g WHERE) re-enter into the respective menu entry and choose C<'- OK -'>.
 
 =head3 Expand
 
@@ -3434,9 +3444,9 @@ Set the I<mouse mode> (see L<Term::Choose/mouse>).
 
 Set the default I<lock> value:
 
-- Lk0: Reset the C<SQL>-statement after each "PrintTable".
+- Lk0: Reset the SQL-statement after each "PrintTable".
 
-- Lk1: Reset the C<SQL>-statement only when a table is selected.
+- Lk1: Reset the SQL-statement only when a table is selected.
 
 =head3 Metadata
 
@@ -3444,9 +3454,9 @@ If enabled system tables/schemas/databases are appended to the respective list.
 
 =head3 Regexp Case
 
-If enabled C<REGEXP> will match case sensitive.
+If enabled REGEXP will match case sensitive.
 
-With C<MySQL> the sensitive match is achieved by enabling the C<BINARY> operator.
+With MySQL the sensitive match is achieved by enabling the BINARY operator.
 
 =head3 DB Login
 
@@ -3466,16 +3476,16 @@ If set the I<default user> is used as username for database logins.
 
 =head4 See if it's a number
 
-If set to C<YES> L<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are
+If set to "YES" L<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are
 numbers.
 
-See L<DBD::SQLite> for details. This is a C<SQLite>-only option.
+See L<DBD::SQLite> for details. This is a SQLite-only option.
 
 =head4 Enable utf8
 
-If enabled the C<utf8> flag will be turned on for character data coming from the database.
+If enabled the utf8 flag will be turned on for character data coming from the database.
 
-For a more driver specific explanation see the documentation of the respective Perl C<DBI> driver.
+For a more driver specific explanation see the documentation of the respective Perl DBI driver.
 
 =head4 "Binary Filter"
 
@@ -3489,11 +3499,11 @@ Database defaults can be overwritten for each Database with the "Database settin
 
 =head1 HINTS
 
-The hints refer to the C<SQL> menu - the menu which opens after a table was selected.
+The hints refer to the SQL menu - the menu which opens after a table was selected.
 
-If C<AGGREGATE> or/and C<GROUP BY> is set, the C<SELECT> statement is automatically formed.
+If AGGREGATE or/and GROUP BY is set, the SELECT statement is automatically formed.
 
-Changing the lock mode I<Lk[01]> will also reset the entire C<SQL>.
+Changing the lock mode I<Lk[01]> will also reset the entire SQL.
 
 =head3 Scalar functions
 
@@ -3501,12 +3511,12 @@ There is a hidden menu entry: selecting the prompt I<Customize:> makes available
 
 To remove a chosen scalar function from a column select the column with the function a second time.
 
-With C<SQLite> the function C<TRUNCATE> returns stringified values:
+With SQLite the function TRUNCATE returns stringified values:
 
-- When comparing in C<WHERE> or C<HAVING TO> clauses with a number while C<sqlite_see_if_its_a_number> is enabled
-(default) take the non-truncated (original) value for the comparison.
+- when comparing in WHERE or HAVING TO clauses with numbers take the non-truncated (original) value for the
+comparison if C<sqlite_see_if_its_a_number> is enabled (default).
 
-- Also to get a numeric comparison in an C<ORDER BY> clause use the non-truncated (original) values for the ordering.
+- also to get a numeric comparison in an ORDER BY clause use the non-truncated (original) values for the ordering.
 
 =head1 AUTHOR
 

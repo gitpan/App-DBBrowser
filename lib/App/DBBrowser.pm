@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.014';
+our $VERSION = '0.015';
 
 
 1;
@@ -17,11 +17,11 @@ __END__
 
 =head1 NAME
 
-App::DBBrowser - Search and read in C<SQLite/MySQL/PostgreSQL> databases.
+App::DBBrowser - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.014
+Version 0.015
 
 =head1 SYNOPSIS
 
@@ -31,7 +31,7 @@ Version 0.014
 
     db-browser -h|--help
 
-C<db-browser> called with C<-h|--help> shows a menu which offers also a C<HELP> text.
+C<db-browser> called with C<-h|--help> shows a menu which offers also a HELP text.
 
 =head2 SQLite
 
@@ -43,7 +43,7 @@ C<db-browser> called with C<-s|--search> causes a new search of SQLite databases
 
 =head1 DESCRIPTION
 
-Search and read in C<SQLite/MySQL/PostgreSQL> databases.
+Search and read in SQLite/MySQL/PostgreSQL databases.
 
 For further information see L<db-browser>.
 
@@ -51,15 +51,10 @@ For further information see L<db-browser>.
 
 It is required Perl version 5.10.1 or greater.
 
-The C<db-browser> assumes C<UTF-8> as the console output encoding except for C<MSWin32 OS>
+It is recommended to work with an UTF encoding since non mappable characters might break the output.
 
-where the output encoding is detected automatically.
-
-But it is recommended also for C<MSWin32 OS> to work with an C<UTF> encoding
-
-since non mappable characters might break the output.
-
-See also the requirements mentioned in L<Term::Choose> which itself is required by the C<db-browser>.
+See also the requirements mentioned in L<Term::Choose> (respective L<Term::Choose::Win32>) which itself is required by
+the C<db-browser>.
 
 =head1 AUTHOR
 

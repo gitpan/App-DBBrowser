@@ -35,6 +35,7 @@ for my $file ( @files ) {
     for my $module ( keys %{$prereqs->{requirements}} ) {
         next if $module =~ /^\p{Lowercase}/;
         next if $module =~ /^App::DBBrowser::/;
+        next if $module eq 'DBD::Pg'; #####
         $modules{$module} = $module;
     }
 }
