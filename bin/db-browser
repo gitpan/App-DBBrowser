@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.015';
+our $VERSION = '0.016';
 
 use Encode                qw(encode decode);
 use File::Basename        qw(basename);
@@ -2504,17 +2504,19 @@ sub database_setting {
             if ( $option eq $opt->{"Pg"}{pg_enable_utf8}[chs] ) {
                 #my ( $key, $prompt ) = ( 'pg_enable_utf8', 'Enable utf8' );
                 #opt_yes_no( $info, $opt, $section, $key, $prompt );
-                my $list = [ 'NO', 'YES' ];
+                my ( $key, $prompt ) = ( 'pg_enable_utf8', 'Enable utf8' );
+                my $list = [ 'YES', 'NO' ];
                 my $main;
                 eval {
                     require DBD::Pg;
                     $main = ( split /\./, $DBD::Pg::VERSION )[0];
                 };
                 push @$list, 'AUTO' if $main && $main >= 3;
-                $opt->{Pg}{pg_enable_utf8}[v] = 2 if $opt->{Pg}{pg_enable_utf8}[v] == -1;
-                my ( $key, $prompt ) = ( 'pg_enable_utf8', 'Enable utf8' );
+                my @decode_in = ( 1, 0, 2 );
+                $opt->{$section}{$key}[v] = $decode_in[$opt->{$section}{$key}[v]];
                 opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
-                $opt->{Pg}{pg_enable_utf8}[v] = -1 if $opt->{Pg}{pg_enable_utf8}[v] == 2;
+                my @encode_out = ( 1, 0, -1 );
+                $opt->{$section}{$key}[v] = $encode_out[$opt->{$section}{$key}[v]];
             }
             elsif ( $option eq $opt->{"Pg"}{default_user}[chs] ) {
                 my ( $key, $prompt ) = ( 'default_user', 'Default user' );
@@ -3300,7 +3302,7 @@ C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.015
+Version 0.016
 
 =cut
 
@@ -3329,7 +3331,7 @@ Search and read in SQLite/MySQL/PostgreSQL databases.
 To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database
 privileges required for fetching the respective data.
 
-The C<db-browser> expects an existing C<home> directory with read and write permissions for the user of C<db-browser>.
+The C<db-browser> expects an existing home directory with read and write permissions for the user of C<db-browser>.
 
 It is recommended to work with an UTF encoding. Non mappable characters might break the output.
 
@@ -3499,7 +3501,7 @@ Database defaults can be overwritten for each Database with the "Database settin
 
 =head1 HINTS
 
-The hints refer to the SQL menu - the menu which opens after a table was selected.
+The following hints refer to the SQL menu - the menu which opens after a table was selected.
 
 If AGGREGATE or/and GROUP BY is set, the SELECT statement is automatically formed.
 
@@ -3507,7 +3509,7 @@ Changing the lock mode I<Lk[01]> will also reset the entire SQL.
 
 =head3 Scalar functions
 
-There is a hidden menu entry: selecting the prompt I<Customize:> makes available some scalar functions.
+There is a hidden menu entry: selecting the prompt "Customize:" makes available some scalar functions.
 
 To remove a chosen scalar function from a column select the column with the function a second time.
 

@@ -1,6 +1,9 @@
 Revision history for App-DBBrowser
 
 
+0.016   2014-02-08
+        - Bugfix and update in setting "pg_enable_utf8".
+
 0.015   2014-02-07
         - Fixed bug in "search SQLite databases".
         - "pg_enable_utf8" can be set to "auto" if "DBD::Pg" >= 3.x.x.
