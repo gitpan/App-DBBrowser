@@ -5,12 +5,13 @@ use 5.10.1;
 use open qw(:utf8);
 no warnings 'utf8';
 
-our $VERSION = '0.016';
+our $VERSION = '0.017';
 
 use Encode                qw(encode decode);
 use File::Basename        qw(basename);
 use File::Find            qw(find);
-use File::Spec::Functions qw(catfile catdir rel2abs);
+use File::Spec::Functions qw(catfile catdir);
+use FindBin               qw($RealBin $RealScript);
 use Getopt::Long          qw(GetOptions);
 use List::Util            qw(sum);
 use Pod::Usage            qw(pod2usage);
@@ -100,6 +101,8 @@ my $info = {
     _continue         => '  CONTINUE',
     _info             => '  INFO',
     _reset            => '  RESET',
+    yes_no            => [ 'YES', 'NO' ],
+    thsd_sep           => ',',
     line_fold         => { Charset=> 'utf8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
     avail_aggregate   => [ "AVG(X)", "COUNT(X)", "COUNT(*)", "MAX(X)", "MIN(X)", "SUM(X)" ],
     cached            => '',
@@ -120,22 +123,21 @@ my $my_operators  = [ "REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS NOT 
 
 my $defaults = {
     print => {
-        tab_width      => [ 2,       '- Tabwidth' ],
-        min_col_width  => [ 30,      '- Colwidth' ],
-        undef          => [ '',      '- Undef' ],
-        limit          => [ 50_000,  '- Max Rows' ],
-        progress_bar   => [ 20_000,  '- ProgressBar' ],
+        tab_width      => [ 2,      '- Tabwidth' ],
+        min_col_width  => [ 30,     '- Colwidth' ],
+        undef          => [ '',     '- Undef' ],
+        progress_bar   => [ 20_000, '- ProgressBar' ],
     },
     sql => {
-        lock_stmt      => [ 0, '- Lock' ],
-        system_info    => [ 0, '- Metadata' ],
-        regexp_case    => [ 0, '- Regexp Case' ],
+        limit          => [ 50_000, '- Max Rows' ],
+        lock_stmt      => [ 0,      '- Lock' ],
+        system_info    => [ 0,      '- Metadata' ],
+        regexp_case    => [ 0,      '- Regexp Case' ],
         parentheses    => [ 1,             '- Parentheses' ],
             w_parentheses  => [ 0, '- Parentheses in WHERE' ],
             h_parentheses  => [ 0, '- Parentheses in HAVING TO' ],
     },
     menu => {
-        thsd_sep       => [ ',',           '- Separator' ],
         db_drivers     => [ $my_db_drivers,'- DB Drivers' ],
         operators      => [ $my_operators, '- Operators' ],
         sssc_mode      => [ 0,             '- Sssc Mode' ],
@@ -147,7 +149,10 @@ my $defaults = {
             table_expand       => [ 1, '- Print  Table' ],
     },
     dbs => {
-        login               => [ 0,       '- DB Login' ],
+        login_once          => [ 0,       '- DB Login' ],
+        env_dbi             => [ 1,       '- ENV DBI' ],
+            env_dbi_user       => [ 0,       '- Use DBI_USER' ],
+            env_dbi_pass       => [ 0,       '- Use DBI_PASS' ],
         db_defaults         => [ 'Dummy', '- DB Defaults' ],
     },
     SQLite => {
@@ -157,14 +162,12 @@ my $defaults = {
         binary_filter              => [ 0, '- Binary Filter' ],
     },
     mysql => {
-        default_user        => [ '', '- Default User' ],
         host                => [ '', '- Host' ],
         port                => [ '', '- Port' ],
         mysql_enable_utf8   => [ 1,  '- Enable utf8' ],
         binary_filter       => [ 0,  '- Binary Filter' ],
     },
     Pg => {
-        default_user        => [ '', '- Default User' ],
         host                => [ '', '- Host' ],
         port                => [ '', '- Port' ],
         pg_enable_utf8      => [ 1,  '- Enable utf8' ],
@@ -173,17 +176,18 @@ my $defaults = {
 };
 
 $info->{option_sections} = [ qw( print sql menu dbs ) ];
-$info->{print}{keys}     = [ qw( tab_width min_col_width undef limit progress_bar ) ];
-$info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case parentheses ) ];
-$info->{dbs}{keys}       = [ qw( login db_defaults ) ];
-$info->{menu}{keys}      = [ qw( thsd_sep db_drivers operators sssc_mode expand  mouse ) ];
+$info->{print}{keys}     = [ qw( tab_width min_col_width undef progress_bar ) ];
+$info->{sql}{keys}       = [ qw( limit lock_stmt system_info regexp_case parentheses ) ];
+$info->{dbs}{keys}       = [ qw( login_once env_dbi db_defaults ) ];
+$info->{menu}{keys}      = [ qw( db_drivers operators sssc_mode expand  mouse ) ];
 $info->{db_sections}     = [ qw( SQLite mysql Pg ) ];
 $info->{SQLite}{keys}    = [ qw( reset_cache sqlite_unicode sqlite_see_if_its_a_number binary_filter ) ];
-$info->{mysql}{keys}     = [ qw( default_user mysql_enable_utf8 binary_filter host port ) ];
-$info->{Pg}{keys}        = [ qw( default_user pg_enable_utf8 binary_filter host port ) ];
+$info->{mysql}{keys}     = [ qw( mysql_enable_utf8 binary_filter host port ) ];
+$info->{Pg}{keys}        = [ qw( pg_enable_utf8 binary_filter host port ) ];
 
 $info->{sub_expand}{menu}     = [ qw( keep_db_choice keep_schema_choice keep_table_choice table_expand ) ];
 $info->{sub_parentheses}{sql} = [ qw( w_parentheses h_parentheses ) ];
+$info->{sub_env_dbi}{dbs}     = [ qw( env_dbi_user env_dbi_pass ) ];
 $info->{cmdline_only}{SQLite} = [ qw( reset_cache ) ];
 
 my $opt;
@@ -1527,7 +1531,7 @@ sub read_table {
                 next LIMIT if ! defined $limit || $limit eq '--';
                 push @{$sql->{quote}{limit_args}}, $limit;
                 $sql->{quote}{limit_stmt} .= ' ' . '?';
-                $sql->{print}{limit_stmt} .= ' ' . insert_sep( $limit, $opt->{menu}{thsd_sep}[v] );
+                $sql->{print}{limit_stmt} .= ' ' . insert_sep( $info, $opt, $limit );
                 if ( $choice eq $offset_and_limit ) {
                     # Choose_a_number
                     my $offset = choose_a_number( $info, $opt, $digits, '"OFFSET"' );
@@ -1539,7 +1543,7 @@ sub read_table {
                     }
                     push @{$sql->{quote}{limit_args}}, $offset;
                     $sql->{quote}{limit_stmt} .= " OFFSET " . '?';
-                    $sql->{print}{limit_stmt} .= " OFFSET " . insert_sep( $offset, $opt->{menu}{thsd_sep}[v] );
+                    $sql->{print}{limit_stmt} .= " OFFSET " . insert_sep( $info, $opt, $offset );
                 }
             }
         }
@@ -1673,9 +1677,9 @@ sub read_table {
             $select .= $sql->{quote}{limit_stmt};
             my @arguments = ( @{$sql->{quote}{where_args}}, @{$sql->{quote}{having_args}}, @{$sql->{quote}{limit_args}} );
             $info->{auto_limit} = 0;
-            if ( ! $sql->{quote}{limit_stmt} && defined $opt->{print}{limit}[v] ) {
+            if ( ! $sql->{quote}{limit_stmt} && defined $opt->{sql}{limit}[v] ) {
                 $select .= " LIMIT ?";
-                push @arguments, $opt->{print}{limit}[v];
+                push @arguments, $opt->{sql}{limit}[v];
                 $info->{auto_limit} = 1;
             }
             say 'Computing: ...' if defined $opt->{print}{progress_bar}[v];
@@ -2064,9 +2068,9 @@ sub func_print_tbl {
     return if ! $width_head || ! $width_cols;
     my ( $list, $len ) = trunk_col_to_avail_width( $info, $opt, $a_ref, $width_cols, $not_a_number, $show_progress );
 
-    my $max_rows = $opt->{print}{limit}[v] // @$list;
+    my $max_rows = $opt->{sql}{limit}[v] // @$list;
     if ( $info->{auto_limit} && @$list > $max_rows ) {
-        my $reached_limit = 'REACHED LIMIT MAX_ROWS: ' . insert_sep( $max_rows, $opt->{menu}{thsd_sep}[v] ) . '';
+        my $reached_limit = 'REACHED LIMIT MAX_ROWS: ' . insert_sep( $info, $opt, $max_rows ) . '';
         my $gcs = Unicode::GCString->new( $reached_limit );
         if ( $gcs->columns > $term_width ) {
             $reached_limit = unicode_sprintf( $term_width, 'REACHED LIMIT', 0 );
@@ -2178,49 +2182,51 @@ sub options {
             my $bin     = 'bin';
             my $app_dir = 'app dir';
             my $path = {
-                $bin     => rel2abs( $0 ),
-                $app_dir => $info->{app_dir} . '/',
+                $bin     => catfile( $RealBin, $RealScript ),
+                $app_dir => $info->{app_dir},
             };
             my $keys = [ $bin, $app_dir ];
             my $len_key = 7;
             print_hash( $info, $path, $keys, $len_key, ( term_size() )[0] );
         }
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
-            my $max = 99;
+            my $digits = 3;
             my ( $section, $key, $prompt ) = ( 'print', 'tab_width', 'Tab width' );
-            opt_number( $info, $opt, $section, $key, $prompt, $max );
+            opt_number_range( $info, $opt, $section, $key, $prompt, $digits );
         }
         elsif ( $option eq $opt->{"print"}{'min_col_width'}[chs] ) {
-            my $max = 99;
+            my $digits = 3;
             my ( $section, $key, $prompt ) = ( 'print', 'min_col_width', 'Minimum Column width' );
-            opt_number( $info, $opt, $section, $key, $prompt, $max );
+            opt_number_range( $info, $opt, $section, $key, $prompt, $digits );
         }
         elsif ( $option eq $opt->{"print"}{'undef'}[chs] ) {
             my ( $section, $key, $prompt ) = ( 'print', 'undef', 'Print replacement for undefined table vales' );
             opt_readline( $info, $opt, $section, $key, $prompt );
-        }
-        elsif ( $option eq $opt->{"print"}{'limit'}[chs] ) {
-            my $digits = 7;
-            my ( $section, $key, $prompt ) = ( 'print', 'limit', '"Max rows"' );
-            opt_number_range( $info, $opt, $section, $key, $prompt, $digits );
         }
         elsif ( $option eq $opt->{"print"}{'progress_bar'}[chs] ) {
             my $digits = 7;
             my ( $section, $key, $prompt ) = ( 'print', 'progress_bar', '"Threshold ProgressBar"' );
             opt_number_range( $info, $opt, $section, $key, $prompt, $digits );
         }
+        elsif ( $option eq $opt->{"sql"}{'limit'}[chs] ) {
+            my $digits = 7;
+            my ( $section, $key, $prompt ) = ( 'sql', 'limit', '"Max rows"' );
+            opt_number_range( $info, $opt, $section, $key, $prompt, $digits );
+        }
         elsif ( $option eq $opt->{"sql"}{'lock_stmt'}[chs] ) {
             my $list = [ 'Lk0', 'Lk1' ];
             my ( $section, $key, $prompt ) = ( 'sql', 'lock_stmt', 'Keep statement' );
-            opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
+            opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
         }
         elsif ( $option eq $opt->{"sql"}{'system_info'}[chs] ) {
+            my $list = $info->{yes_no};
             my ( $section, $key, $prompt ) = ( 'sql', 'system_info', 'Enable Metadata' );
-            opt_yes_no( $info, $opt, $section, $key, $prompt );
+            opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
         }
         elsif ( $option eq $opt->{"sql"}{'regexp_case'}[chs] ) {
+            my $list = $info->{yes_no};
             my ( $section, $key, $prompt ) = ( 'sql', 'regexp_case', 'REGEXP case sensitiv' );
-            opt_yes_no( $info, $opt, $section, $key, $prompt );
+            opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
         }
         elsif ( $option eq $opt->{"sql"}{'parentheses'}[chs] ) {
             my $section = 'sql';
@@ -2228,23 +2234,24 @@ sub options {
             my $two_val = [ 'NO', 'YES' ];
             multi_options( $info, $opt, $section, $keys, $two_val );
         }
-        elsif ( $option eq $opt->{"dbs"}{'login'}[chs] ) {
-            my $list = [ 'once per DB', 'only once' ];
-            my ( $section, $key, $prompt ) = ( 'dbs', 'login', 'Ask for credentials' );
-            opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
+        elsif ( $option eq $opt->{"dbs"}{'login_once'}[chs] ) {
+            my $list = [ 'per-DB', 'once' ];
+            my ( $section, $key, $prompt ) = ( 'dbs', 'login_once', 'Ask for credentials' );
+            opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
+        }
+        elsif ( $option eq $opt->{"dbs"}{'env_dbi'}[chs] ) {
+            my $section = 'dbs';
+            my $keys = $info->{sub_env_dbi}{dbs};
+            my $two_val = [ 'NO', 'YES' ];
+            multi_options( $info, $opt, $section, $keys, $two_val );
         }
         elsif ( $option eq $opt->{"dbs"}{'db_defaults'}[chs] ) {
             database_setting( $info, $opt );
         }
-        elsif ( $option eq $opt->{"menu"}{'thsd_sep'}[chs] ) {
-            my $list = [ "','", "'.'", "'_'", "' '", "''" ];
-            my ( $section, $key, $prompt ) = ( 'menu', 'thsd_sep', 'Thousands separator' );
-            opt_choose_list_value( $info, $opt, $section, $key, $prompt, $list );
-        }
         elsif ( $option eq $opt->{"menu"}{'sssc_mode'}[chs] ) {
             my $list = [ 'simple', 'compat' ];
             my ( $section, $key, $prompt ) = ( 'menu', 'sssc_mode', 'Sssc mode' );
-            opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
+            opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
         }
         elsif ( $option eq $opt->{"menu"}{'operators'}[chs] ) {
             my $available = $info->{avail_operators};
@@ -2314,38 +2321,19 @@ sub multi_options {
     }
 }
 
-sub opt_yes_no {
-    my ( $info, $opt, $section, $key, $prompt ) = @_;
-    my ( $yes, $no ) = ( 'YES', 'NO' );
-    my $current = $opt->{$section}{$key}[v];
-    # Choose
-    my $choice = choose(
-        [ undef, $yes, $no ],
-        { prompt => $prompt . ' [' . ( $current ? 'YES' : 'NO' ) . ']:', %{$info->{lyt_1}} }
-    );
-    return if ! defined $choice;
-    $opt->{$section}{$key}[v] = $choice eq $yes ? 1 : 0;
-    $info->{write_config}++;
-    return;
-}
-
-sub opt_choose_list_value {
+sub opt_choose_index {
     my ( $info, $opt, $section, $key, $prompt, $list ) = @_;
-    my $current = $opt->{$section}{$key}[v]; # // '--'
-    # Choose
-    my $choice = choose(
-        [ undef, @$list ],
-        { prompt => $prompt . ' [' . $current . ']:', %{$info->{lyt_1}} }
-    );
-    return if ! defined $choice;
-    $choice =~ s/^'|'\z//g;
-    $opt->{$section}{$key}[v] = $choice;
-    $info->{write_config}++;
-    return;
-}
-
-sub opt_choose_list_index {
-    my ( $info, $opt, $section, $key, $prompt, $list ) = @_;
+    my $yn = 0;
+    if ( $list->[0] eq 'YES' && $list->[1] eq 'NO' ) {
+        $yn = 1;
+    }
+    if ( $yn ) {
+        if ( $opt->{$section}{$key}[v] == 0 ) {
+            $opt->{$section}{$key}[v] = 1;
+        } elsif ( $opt->{$section}{$key}[v] == 1 ) {
+            $opt->{$section}{$key}[v] = 0;
+        }
+    }
     my $current = $list->[$opt->{$section}{$key}[v]];
     # Choose
     my $idx = choose(
@@ -2356,6 +2344,13 @@ sub opt_choose_list_index {
     return if $idx == 0;
     $idx--;
     $opt->{$section}{$key}[v] = $idx;
+    if ( $yn ) {
+        if ( $opt->{$section}{$key}[v] == 0 ) {
+            $opt->{$section}{$key}[v] = 1;
+        } elsif ( $opt->{$section}{$key}[v] == 1 ) {
+            $opt->{$section}{$key}[v] = 0;
+        }
+    }
     $info->{write_config}++;
     return;
 }
@@ -2388,7 +2383,7 @@ sub opt_number {
 sub opt_number_range {
     my ( $info, $opt, $section, $key, $prompt, $digits ) = @_;
     my $current = $opt->{$section}{$key}[v];
-    $current = insert_sep( $current, $opt->{menu}{thsd_sep}[v] );
+    $current = insert_sep( $info, $opt, $current );
     # Choose_a_number
     my $choice = choose_a_number( $info, $opt, $digits, $prompt, $current );
     return if ! defined $choice;
@@ -2445,7 +2440,7 @@ sub database_setting {
     DB_OPTION: while ( 1 ) {
         # Choose
         my $option = choose(
-            [ undef, @choices, $info->{_confirm} ],
+            [ undef, $info->{_confirm}, @choices ],
             { %{$info->{lyt_3}} }
         );
         if ( ! defined $option ) {
@@ -2464,27 +2459,27 @@ sub database_setting {
         }
         if ( $db_driver eq 'SQLite' ) {
             if ( $option eq $opt->{"SQLite"}{sqlite_unicode}[chs] ) {
+                my $list = $info->{yes_no};
                 my ( $key, $prompt ) = ( 'sqlite_unicode', 'Unicode' );
-                opt_yes_no( $info, $opt, $section, $key, $prompt );
+                opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
             }
             elsif ( $option eq $opt->{"SQLite"}{sqlite_see_if_its_a_number}[chs] ) {
+                my $list = $info->{yes_no};
                 my ( $key, $prompt ) = ( 'sqlite_see_if_its_a_number', 'See if its a number' );
-                opt_yes_no( $info, $opt, $section, $key, $prompt );
+                opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
             }
             elsif ( $option eq $opt->{"SQLite"}{binary_filter}[chs] ) {
+                my $list = $info->{yes_no};
                 my ( $key, $prompt ) = ( 'binary_filter', 'Enable Binary Filter' );
-                opt_yes_no( $info, $opt, $section, $key, $prompt );
+                opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
             }
             else { die $option }
         }
         elsif ( $db_driver eq 'mysql' ) {
             if ( $option eq $opt->{"mysql"}{mysql_enable_utf8}[chs] ) {
+                my $list = $info->{yes_no};
                 my ( $key, $prompt ) = ( 'mysql_enable_utf8', 'Enable utf8' );
-                opt_yes_no( $info, $opt, $section, $key, $prompt );
-            }
-            elsif ( $option eq $opt->{"mysql"}{default_user}[chs] ) {
-                my ( $key, $prompt ) = ( 'default_user', 'Default user' );
-                opt_readline( $info, $opt, $section, $key, $prompt );
+                opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
             }
             elsif ( $option eq $opt->{"mysql"}{host}[chs] ) {
                 my ( $key, $prompt ) = ( 'host', 'Host' );
@@ -2495,32 +2490,18 @@ sub database_setting {
                 opt_readline( $info, $opt, $section, $key, $prompt );
             }
             elsif ( $option eq $opt->{"mysql"}{binary_filter}[chs] ) {
+                my $list = $info->{yes_no};
                 my ( $key, $prompt ) = ( 'binary_filter', 'Enable Binary Filter' );
-                opt_yes_no( $info, $opt, $section, $key, $prompt );
+                opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
             }
             else { die $option }
         }
         elsif ( $db_driver eq 'Pg' ) {
             if ( $option eq $opt->{"Pg"}{pg_enable_utf8}[chs] ) {
-                #my ( $key, $prompt ) = ( 'pg_enable_utf8', 'Enable utf8' );
-                #opt_yes_no( $info, $opt, $section, $key, $prompt );
                 my ( $key, $prompt ) = ( 'pg_enable_utf8', 'Enable utf8' );
-                my $list = [ 'YES', 'NO' ];
-                my $main;
-                eval {
-                    require DBD::Pg;
-                    $main = ( split /\./, $DBD::Pg::VERSION )[0];
-                };
-                push @$list, 'AUTO' if $main && $main >= 3;
-                my @decode_in = ( 1, 0, 2 );
-                $opt->{$section}{$key}[v] = $decode_in[$opt->{$section}{$key}[v]];
-                opt_choose_list_index( $info, $opt, $section, $key, $prompt, $list );
-                my @encode_out = ( 1, 0, -1 );
-                $opt->{$section}{$key}[v] = $encode_out[$opt->{$section}{$key}[v]];
-            }
-            elsif ( $option eq $opt->{"Pg"}{default_user}[chs] ) {
-                my ( $key, $prompt ) = ( 'default_user', 'Default user' );
-                opt_readline( $info, $opt, $section, $key, $prompt );
+                my $list = [ @{$info->{yes_no}}, 'AUTO' ];
+                opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
+                $opt->{$section}{$key}[v] = -1 if $opt->{$section}{$key}[v] == 2;
             }
             elsif ( $option eq $opt->{"Pg"}{host}[chs] ) {
                 my ( $key, $prompt ) = ( 'host', 'Host' );
@@ -2531,8 +2512,9 @@ sub database_setting {
                 opt_readline( $info, $opt, $section, $key, $prompt );
             }
             elsif ( $option eq $opt->{"Pg"}{binary_filter}[chs] ) {
+                my $list = $info->{yes_no};
                 my ( $key, $prompt ) = ( 'binary_filter', 'Enable Binary Filter' );
-                opt_yes_no( $info, $opt, $section, $key, $prompt );
+                opt_choose_index( $info, $opt, $section, $key, $prompt, $list );
             }
             else { die $option }
         }
@@ -2619,6 +2601,122 @@ sub local_readline_print {
 }
 
 
+sub choose_a_number {
+    my ( $info, $opt, $digits, $name, $current ) = @_;
+    my $tab = '  -  ';
+    my $gcs_tab = Unicode::GCString->new( $tab );
+    my $length_tab = $gcs_tab->columns;
+    my $longest = $digits;
+    my $thsd_sep = $info->{thsd_sep};
+    $longest += int( ( $digits - 1 ) / 3 ) if $thsd_sep ne '';
+    my @choices_range = ();
+    for my $di ( 0 .. $digits - 1 ) {
+        my $begin = 1 . '0' x $di;
+        $begin = 0 if $di == 0;
+        $begin = insert_sep( $info, $opt, $begin );
+        ( my $end = $begin ) =~ s/^[01]/9/;
+        unshift @choices_range, sprintf " %*s%s%*s", $longest, $begin, $tab, $longest, $end;
+    }
+    my $confirm = sprintf "%-*s", $longest * 2 + $length_tab, $info->{confirm};
+    my $back    = sprintf "%-*s", $longest * 2 + $length_tab, $info->{back};
+    my ( $term_width ) = term_size();
+    my $gcs_longest_range = Unicode::GCString->new( $choices_range[0] );
+    if ( $gcs_longest_range->columns > $term_width ) {
+        @choices_range = ();
+        for my $di ( 0 .. $digits - 1 ) {
+            my $begin = 1 . '0' x $di;
+            $begin = 0 if $di == 0;
+            $begin = insert_sep( $info, $opt, $begin );
+            unshift @choices_range, sprintf "%*s", $longest, $begin;
+        }
+        $confirm = $info->{confirm};
+        $back    = $info->{back};
+    }
+    my $reset = 'reset';
+    my %numbers;
+    my $result;
+
+    NUMBER: while ( 1 ) {
+        my $new_result = $result // '--';
+        my $prompt = '';
+        if ( @_ == 5 ) {
+            $prompt .= sprintf "%s%*s\n",   'Current ' . $name . ': ', $longest, $current // '--';
+            $prompt .= sprintf "%s%*s\n\n", '    New ' . $name . ': ', $longest, $new_result;
+        }
+        else {
+            $prompt = sprintf "%s%*s\n\n", $name . ': ', $longest, $new_result;
+        }
+        # Choose
+        my $range = choose(
+            [ undef, @choices_range, $confirm ],
+            { prompt => $prompt, %{$info->{lyt_3}}, justify => 1, undef => $back }
+        );
+        return if ! defined $range;
+        if ( $range eq $confirm ) {
+            return '--' if ! defined $result;
+            $result =~ s/\Q$thsd_sep\E//g if $thsd_sep ne '';
+            return $result;
+        }
+        my $zeros = ( split /\s*-\s*/, $range )[0];
+        $zeros =~ s/^\s*\d//;
+        ( my $zeros_no_sep = $zeros ) =~ s/\Q$thsd_sep\E//g if $thsd_sep ne '';
+        my $count_zeros = length $zeros_no_sep;
+        my @choices = $count_zeros ? map( $_ . $zeros, 1 .. 9 ) : ( 0 .. 9 );
+        # Choose
+        my $number = choose(
+            [ undef, @choices, $reset ],
+            { prompt => $prompt, %{$info->{lyt_1}} }
+        );
+        next if ! defined $number;
+        if ( $number eq $reset ) {
+            delete $numbers{$count_zeros};
+        }
+        else {
+            $number =~ s/\Q$thsd_sep\E//g if $thsd_sep ne '';
+            $numbers{$count_zeros} = $number;
+        }
+        $result = sum( @numbers{keys %numbers} );
+        $result = insert_sep( $info, $opt, $result );
+    }
+}
+
+
+sub choose_list {
+    my ( $info, $current, $available ) = @_;
+    my $new = [];
+    my $key_cur = 'Current > ';
+    my $key_new = '    New > ';
+    my $gcs_cur = Unicode::GCString->new( $key_cur );
+    my $gcs_new = Unicode::GCString->new( $key_new );
+    my $length_key = $gcs_cur->columns > $gcs_new->columns ? $gcs_cur->columns : $gcs_new->columns;
+    while ( 1 ) {
+        my $prompt = $key_cur . join( ', ', map { "\"$_\"" } @$current ) . "\n";
+        $prompt   .= $key_new . join( ', ', map { "\"$_\"" } @$new )     . "\n\n";
+        $prompt   .= 'Choose:';
+        # Choose
+        my $choice = choose(
+            [ undef, $info->{_confirm}, map( "- $_", @$available ) ],
+            { prompt => $prompt, lf => [0,$length_key], %{$info->{lyt_3}} }
+        );
+        if ( ! defined $choice ) {
+            if ( @$new ) {
+                $new = [];
+                next;
+            }
+            else {
+                return;
+            }
+        }
+        if ( $choice eq $info->{_confirm} ) {
+            return $new if @$new;
+            return;
+        }
+        $choice =~ s/^-\s//;
+        push @$new, $choice;
+    }
+}
+
+
 sub write_config_file {
     my ( $opt, $file ) = @_;
     my $tmp = {};
@@ -2663,86 +2761,6 @@ sub read_json {
 }
 
 
-sub choose_a_number {
-    my ( $info, $opt, $digits, $name, $current ) = @_;
-    my $sep = $opt->{menu}{thsd_sep}[v];
-    my $tab = '  -  ';
-    my $gcs_tab = Unicode::GCString->new( $tab );
-    my $length_tab = $gcs_tab->columns;
-    my $longest = $digits;
-    $longest += int( ( $digits - 1 ) / 3 ) if $sep ne '';
-    my @choices_range = ();
-    for my $di ( 0 .. $digits - 1 ) {
-        my $begin = 1 . '0' x $di;
-        $begin = 0 if $di == 0;
-        $begin = insert_sep( $begin, $sep );
-        ( my $end = $begin ) =~ s/^[01]/9/;
-        unshift @choices_range, sprintf " %*s%s%*s", $longest, $begin, $tab, $longest, $end;
-    }
-    my $confirm = sprintf "%-*s", $longest * 2 + $length_tab, $info->{confirm};
-    my $back    = sprintf "%-*s", $longest * 2 + $length_tab, $info->{back};
-    my ( $term_width ) = term_size();
-    my $gcs_longest_range = Unicode::GCString->new( $choices_range[0] );
-    if ( $gcs_longest_range->columns > $term_width ) {
-        @choices_range = ();
-        for my $di ( 0 .. $digits - 1 ) {
-            my $begin = 1 . '0' x $di;
-            $begin = 0 if $di == 0;
-            $begin = insert_sep( $begin, $sep );
-            unshift @choices_range, sprintf "%*s", $longest, $begin;
-        }
-        $confirm = $info->{confirm};
-        $back    = $info->{back};
-    }
-    my $reset = 'reset';
-    my %numbers;
-    my $result;
-
-    NUMBER: while ( 1 ) {
-        my $new_result = $result // '--';
-        my $prompt = '';
-        if ( @_ == 5 ) {
-            $prompt .= sprintf "%s%*s\n",   'Current ' . $name . ': ', $longest, $current // '--';
-            $prompt .= sprintf "%s%*s\n\n", '    New ' . $name . ': ', $longest, $new_result;
-        }
-        else {
-            $prompt = sprintf "%s%*s\n\n", $name . ': ', $longest, $new_result;
-        }
-        # Choose
-        my $range = choose(
-            [ undef, @choices_range, $confirm ],
-            { prompt => $prompt, %{$info->{lyt_3}}, justify => 1, undef => $back }
-        );
-        return if ! defined $range;
-        if ( $range eq $confirm ) {
-            return '--' if ! defined $result;
-            $result =~ s/\Q$sep\E//g if $sep ne '';
-            return $result;
-        }
-        my $zeros = ( split /\s*-\s*/, $range )[0];
-        $zeros =~ s/^\s*\d//;
-        ( my $zeros_no_sep = $zeros ) =~ s/\Q$sep\E//g if $sep ne '';
-        my $count_zeros = length $zeros_no_sep;
-        my @choices = $count_zeros ? map( $_ . $zeros, 1 .. 9 ) : ( 0 .. 9 );
-        # Choose
-        my $number = choose(
-            [ undef, @choices, $reset ],
-            { prompt => $prompt, %{$info->{lyt_1}} }
-        );
-        next if ! defined $number;
-        if ( $number eq $reset ) {
-            delete $numbers{$count_zeros};
-        }
-        else {
-            $number =~ s/\Q$sep\E//g if $sep ne '';
-            $numbers{$count_zeros} = $number;
-        }
-        $result = sum( @numbers{keys %numbers} );
-        $result = insert_sep( $result, $sep );
-    }
-}
-
-
 sub handle_reference {
     my ( $ref ) = @_;
     if ( ref $ref eq 'ARRAY' ) {
@@ -2770,39 +2788,12 @@ sub handle_reference {
 
 
 sub insert_sep {
-    my ( $number, $separator ) = @_;
+    my ( $info, $opt, $number ) = @_;
     return if ! defined $number;
+    my $separator = $info->{thsd_sep};
     return $number if ! $separator;
     $number =~ s/(\d)(?=(?:\d{3})+\b)/$1$separator/g;
     return $number;
-}
-
-
-sub choose_list {
-    my ( $info, $current, $available ) = @_;
-    my $new = [];
-    my $key_cur = 'Current > ';
-    my $key_new = '    New > ';
-    my $gcs_cur = Unicode::GCString->new( $key_cur );
-    my $gcs_new = Unicode::GCString->new( $key_new );
-    my $length_key = $gcs_cur->columns > $gcs_new->columns ? $gcs_cur->columns : $gcs_new->columns;
-    while ( 1 ) {
-        my $prompt = $key_cur . join( ', ', map { "\"$_\"" } @$current ) . "\n";
-        $prompt   .= $key_new . join( ', ', map { "\"$_\"" } @$new )     . "\n\n";
-        $prompt   .= 'Choose:';
-        # Choose
-        my $choice = choose(
-            [ undef, $info->{_confirm}, map( "- $_", @$available ) ],
-            { prompt => $prompt, lf => [0,$length_key], %{$info->{lyt_3}} }
-        );
-        return if ! defined $choice;
-        if ( $choice eq $info->{_confirm} ) {
-            return $new if @$new;
-            return;
-        }
-        $choice =~ s/^-\s//;
-        push @$new, $choice;
-    }
 }
 
 
@@ -2835,47 +2826,57 @@ sub unicode_sprintf {
 }
 
 
-sub get_credentials {
+sub get_username {
     my ( $info, $opt, $db ) = @_;
-    if ( $info->{db_driver} eq 'SQLite' ) {
-        return '', '';
+    my $db_driver = $info->{db_driver};
+    return '' if $db_driver eq 'SQLite';
+    return $ENV{DBI_USER} if $opt->{dbs}{env_dbi_user}[v];
+    my ( $user );
+    if ( $opt->{dbs}{login_once}[v] ) {
+        $user = $info->{login}{$db_driver}{user};
     }
-    my ( $user, $passwd );
-    if ( length( $opt->{$info->{db_driver}}{default_user}[v] // '' ) ) {
-        $user = $opt->{$info->{db_driver}}{default_user}[v];
-    }
-    my $db_key = $info->{db_driver} . '_' . $db;
-    my $login = $opt->{dbs}{login}[v];
-    if( $login == 0 ) {
-        $user //= $info->{login}{$info->{db_driver}}{$db}{user};
-        $passwd = $info->{login}{$info->{db_driver}}{$db}{passwd};
-    }
-    elsif ( $login == 1 ) {
-        $user //= $info->{login}{$info->{db_driver}}{user};
-        $passwd = $info->{login}{$info->{db_driver}}{passwd};
+    else {
+        $user = $info->{login}{$db_driver}{$db}{user};
     }
     # Readline
     if ( ! defined $user ) {
-        $user = local_readline(
-            $info,
-            { prompt => 'User: ', status => "DB: $db" }
-        );
+        $user = local_readline( $info, { prompt => 'User: ', status => "DB: $db" } );
     }
+
+    if ( $opt->{dbs}{login_once}[v] ) {
+        $info->{login}{$db_driver}{user} = $user;
+    }
+    else {
+        $info->{login}{$db_driver}{$db}{user} = $user;
+    }
+    return $user;
+}
+
+
+sub get_password {
+    my ( $info, $opt, $db, $user ) = @_;
+    my $db_driver = $info->{db_driver};
+    return '' if $db_driver eq 'SQLite';
+    return $ENV{DBI_PASS} if $opt->{dbs}{env_dbi_pass}[v];
+    my ( $passwd );
+    if ( $opt->{dbs}{login_once}[v] ) {
+        $passwd = $info->{login}{$db_driver}{passwd};
+    }
+    else {
+        $passwd = $info->{login}{$db_driver}{$db}{passwd};
+    }
+    # Readline
     if ( ! defined $passwd ) {
-        $passwd = local_readline(
-            $info,
-            { prompt => 'Password: ', status => "DB: $db\nUser: $user", no_echo => 1 }
-        );
+        my $status = "DB: $db\nUser: $user";
+        $passwd = local_readline( $info, { prompt => 'Password: ', status => $status, no_echo => 1 } );
     }
-    if ( $login == 0 ) {
-        $info->{login}{$info->{db_driver}}{$db}{user}   = $user;
-        $info->{login}{$info->{db_driver}}{$db}{passwd} = $passwd;
+    if ( $opt->{dbs}{login_once}[v] ) {
+        $info->{login}{$db_driver}{passwd} = $passwd;
     }
-    elsif ( $login == 1 ) {
-        $info->{login}{$info->{db_driver}}{user}   = $user;
-        $info->{login}{$info->{db_driver}}{passwd} = $passwd;
+    else {
+        $info->{login}{$db_driver}{$db}{passwd} = $passwd;
     }
-    return $user, $passwd;
+    return $passwd;
 }
 
 
@@ -2903,8 +2904,9 @@ sub get_db_handle {
         $option = 'pg_enable_utf8';
         $db_opt{$option} = $opt->{$db_key}{$option}[v] // $opt->{$db_driver}{$option}[v];
     }
-    my ( $user, $passwd ) = get_credentials( $info, $opt, $db );
-    my $dsn = 'dbi:' . $info->{db_driver} . ':dbname=' . $db;
+    my $user   = get_username( $info, $opt, $db );
+    my $passwd = get_password( $info, $opt, $db, $user );
+    my $dsn = 'dbi:' . $db_driver . ':dbname=' . $db;
     my $host = $opt->{$db_key}{host}[v] || $opt->{$db_driver}{host}[v];
     my $port = $opt->{$db_key}{port}[v] || $opt->{$db_driver}{port}[v];
     $dsn .= ';host=' . $host if $host;
@@ -3285,9 +3287,6 @@ sub col_functions {
 }
 
 
-
-
-
 __END__
 
 
@@ -3302,7 +3301,7 @@ C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.016
+Version 0.017
 
 =cut
 
@@ -3366,8 +3365,7 @@ the C<Enter/Return> key to confirm a chosen menu item.
 
 =back
 
-With the option I<mouse mode> enabled it can be used the mouse with the left mouse key to navigate through the menus
-instead of the keyboard keys.
+With the option I<mouse mode> enabled it can be used the mouse with the left mouse key to navigate through the menus.
 
 The C<q> key goes back (C<Ctrl-D> instead of C<q> if prompted for a string) in the menu hierarchy.
 
@@ -3418,10 +3416,6 @@ Choose the needed operators.
 
 Enable parentheses in WHERE and/or HAVING TO clauses.
 
-=head3 Separator
-
-Choose the thousands separator displayed in menus.
-
 =head3 Sssc Mode
 
 With the I<Sssc> mode "compat" enabled back-arrows are offered in the SQL menus entries. In the "simple" mode it can
@@ -3464,17 +3458,23 @@ With MySQL the sensitive match is achieved by enabling the BINARY operator.
 
 Determine when C<db-browser> asks for the login data:
 
-- once per DB: log in data is asked once per database.
+- per-DB: log in data is asked once per database.
 
-- only once: log in data is asked only once and then used for all connections.
+- once: log in data is asked only once and then used for all connections.
+
+This option has no meaning if the SQLite driver is in use.
+
+=head3 ENV DBI
+
+- use DBI_USER as username for all database logins.
+
+- use DBI_PASS as password for all database logins.
+
+This option has no meaning if the SQLite driver is in use.
 
 =head3 DB Defaults
 
 Set Database defaults:
-
-=head4 Default User
-
-If set the I<default user> is used as username for database logins.
 
 =head4 See if it's a number
 
@@ -3488,6 +3488,11 @@ See L<DBD::SQLite> for details. This is a SQLite-only option.
 If enabled the utf8 flag will be turned on for character data coming from the database.
 
 For a more driver specific explanation see the documentation of the respective Perl DBI driver.
+
+With the "Pg" driver in use it is available apart the "YES/NO" choices also a "AUTO" choice. If
+
+the L<DBD::Pg> version is less than 3.0.0 "AUTO" is mapped to "YES". For the meaning of "AUTO" look in
+L<pg_enable_utf8|https://metacpan.org/pod/DBD::Pg#pg_enable_utf8-integer> for the value -1.
 
 =head4 "Binary Filter"
 
@@ -3509,9 +3514,13 @@ Changing the lock mode I<Lk[01]> will also reset the entire SQL.
 
 =head3 Scalar functions
 
-There is a hidden menu entry: selecting the prompt "Customize:" makes available some scalar functions.
+There is a hidden menu entry: selecting the prompt "Customize:" makes available some scalar functions:
 
-To remove a chosen scalar function from a column select the column with the function a second time.
+=head4 Epoch_to_DateTime
+
+=head4 Epoch_to_Date
+
+=head4 Truncate
 
 With SQLite the function TRUNCATE returns stringified values:
 
@@ -3519,6 +3528,12 @@ With SQLite the function TRUNCATE returns stringified values:
 comparison if C<sqlite_see_if_its_a_number> is enabled (default).
 
 - also to get a numeric comparison in an ORDER BY clause use the non-truncated (original) values for the ordering.
+
+=head4 Bit_Length
+
+=head4 Char_Length
+
+To remove a chosen scalar function from a column select the column with the function a second time.
 
 =head1 AUTHOR
 

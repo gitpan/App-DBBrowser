@@ -49,6 +49,7 @@ WriteMakefile(
         'File::Find'            => 0,
         'File::HomeDir'         => 0,
         'File::Spec::Functions' => 0,
+        'FindBin'               => 0,
         'Getopt::Long'          => 0,
         'JSON::XS'              => 0,
         'List::MoreUtils'       => 0,

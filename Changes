@@ -1,6 +1,15 @@
 Revision history for App-DBBrowser
 
 
+0.017   2014-02-19
+        - Added new option "ENV DBI" which allows the use of DBI_USER and DBI_PASS to login.
+        - Removed the option "Default user".
+        - Removed the option "Separator"
+        - "pg_enable_utf8" can always be set to "auto" (with "DBD::Pg" < 3.0.0 "auto" is mapped to "enabled").
+        - Use "FinBin" the get the path of the program.
+        - Code refactoring.
+        - Update documentation.
+
 0.016   2014-02-08
         - Bugfix and update in setting "pg_enable_utf8".
 

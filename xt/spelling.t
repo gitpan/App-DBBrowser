@@ -26,3 +26,5 @@ Tabwidth
 compat
 repexp
 stackoverflow
+ENV
+Pg
