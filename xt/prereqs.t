@@ -9,7 +9,7 @@ use Perl::PrereqScanner;
 my %prereqs_make;
 open my $fh_m, '<', 'Makefile.PL' or die $!;
 while ( my $line = <$fh_m> ) {
-    if ( $line =~ /^\s*'([^']+)'\s+=>\s+0,/ ) {
+    if ( $line =~ /^\s*'([^']+)'\s+=>\s+(?:'(?:[<>=]{2}\s?)?\d\.\d\d\d(?:_\d\d)?'|0),/ ) {
         $prereqs_make{$1} = $1;
     }
 
@@ -35,7 +35,6 @@ for my $file ( @files ) {
     for my $module ( keys %{$prereqs->{requirements}} ) {
         next if $module =~ /^\p{Lowercase}/;
         next if $module =~ /^App::DBBrowser::/;
-        next if $module eq 'DBD::Pg'; #####
         $modules{$module} = $module;
     }
 }

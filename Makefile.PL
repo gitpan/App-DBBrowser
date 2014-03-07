@@ -4,17 +4,11 @@ use strict;
 use ExtUtils::MakeMaker;
 
 
-my %prereqs_in_cpan_os_specific;
+my %prereqs_os_specific;
 if ( $^O eq 'MSWin32' ) {
-    %prereqs_in_cpan_os_specific = (
-        'Term::Choose::Win32'  => 0,
+    %prereqs_os_specific = (
         'Term::Size::Win32'    => 0,
         'Win32::Console::ANSI' => 0,
-    );
-}
-else {
-    %prereqs_in_cpan_os_specific = (
-        'Term::Choose'         => 0,
     );
 }
 
@@ -56,11 +50,12 @@ WriteMakefile(
         'List::Util'            => 0,
         'Pod::Usage'            => 0,
         'Scalar::Util'          => 0,
-        'Term::ProgressBar'     => 0,
+        'Term::Choose'          => '1.100',
+        'Term::TablePrint'      => 0,
         'Term::ReadKey'         => 0,
         'Text::LineFold'        => 0,
         'Unicode::GCString'     => 0,
-        %prereqs_in_cpan_os_specific,
+        %prereqs_os_specific,
     },
     clean => {
         FILES => 'App-DBBrowser-*',

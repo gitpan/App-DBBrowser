@@ -2,13 +2,14 @@ use 5.010001;
 use strict;
 use warnings;
 use File::Basename qw(basename);
-use Test::More tests => 2;
+use Test::More tests => 3;
 
 
 my $file = 'bin/db-browser';
 
 my $data_dumper = 0;
 my $warnings    = 0;
+my $use_lib     = 0;
 
 open my $fh, '<', $file or die $!;
 while ( my $line = readline $fh ) {
@@ -18,8 +19,12 @@ while ( my $line = readline $fh ) {
     if ( $line =~ /^\s*use\s+warnings\s+FATAL/s ) {
         $warnings++;
     }
+    if ( $line =~ /^\s*use\s+lib\s/s ) {
+        $use_lib++;
+    }
 }
 close $fh;
 
-is( $data_dumper, 0, 'OK - Data::Dumper in "' . basename( $file ) . '" disabled.' );
-is( $warnings,    0, 'OK - warnings in "'     . basename( $file ) . '" disabled.' );
+is( $data_dumper, 0, 'OK - Data::Dumper in "'   . basename( $file ) . '" disabled.' );
+is( $warnings,    0, 'OK - warnings FATAL in "' . basename( $file ) . '" disabled.' );
+is( $use_lib,     0, 'OK - no "use lib" in "'   . basename( $file ) . '"' );

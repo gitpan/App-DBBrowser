@@ -1,6 +1,11 @@
 Revision history for App-DBBrowser
 
 
+0.018   2014-03-07
+        - "App::DBBrowser" requires "Term::Choose" version 1.100 or higher.
+        - Outsourced the table print function in its own module: "Term::TablePrint".
+        - Code refactoring.
+
 0.017   2014-02-19
         - Added new option "ENV DBI" which allows the use of DBI_USER and DBI_PASS to login.
         - Removed the option "Default user".
