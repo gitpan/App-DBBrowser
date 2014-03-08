@@ -2,10 +2,10 @@
 use warnings;
 use strict;
 use 5.10.1;
-use open qw(:utf8);
+use open qw( :utf8 );
 no warnings 'utf8';
 
-our $VERSION = '0.018';
+our $VERSION = '0.019';
 
 use Encode                qw( encode decode );
 use File::Basename        qw( basename );
@@ -53,12 +53,14 @@ sub term_size {
     }
 }
 
-
 END { ReadMode 0 }
 
 use constant {
-    BSPACE         => 0x7f,
-    CLEAR_SCREEN   => "\e[1;1H\e[0J",
+    BSPACE                  => 0x7f,
+    CLEAR_TO_END_OF_SCREEN  => "\e[0J",
+    CLEAR_SCREEN            => "\e[1;1H\e[0J",
+    SAVE_CURSOR_POSITION    => "\e[s",
+    RESTORE_CURSOR_POSITION => "\e[u",
 };
 
 
@@ -114,7 +116,7 @@ my $defaults = {
     db_defaults          => 'Dummy',
     db_drivers           => [ 'SQLite', 'mysql', 'Pg' ],
     db_login_once        => 0,
-    _env_dbi            => 1,
+    _env_dbi             => 1,
     env_dbi_user         => 0,
     env_dbi_pass         => 0,
     _expand              => 'Dummy',
@@ -227,7 +229,8 @@ sub get_username {
     }
     # Readline
     if ( ! defined $user ) {
-        $user = local_readline( $info, { prompt => 'User: ', status => "DB: $db" } );
+        print "DB: $db\n";
+        $user = local_readline( $info, { prompt => 'User: ' } );
     }
 
     if ( $opt->{db_login_once} ) {
@@ -254,8 +257,8 @@ sub get_password {
     }
     # Readline
     if ( ! defined $passwd ) {
-        my $status = "DB: $db\nUser: $user";
-        $passwd = local_readline( $info, { prompt => 'Password: ', status => $status, no_echo => 1 } );
+        print "DB: $db\nUser: $user\n";
+        $passwd = local_readline( $info, { prompt => 'Password: ', no_echo => 1 } );
     }
     if ( $opt->{db_login_once} ) {
         $info->{login}{$db_driver}{passwd} = $passwd;
@@ -657,15 +660,16 @@ sub union_tables {
         UNION_COLUMN: while ( 1 ) {
             my ( $all_cols, $privious_cols, $void ) = ( q['*'], q['^'], q[' '] );
             my @short_cuts = ( ( @{$union->{saved_cols}} ? $privious_cols : $void ), $all_cols );
-            my $choices = [ $info->{ok}, @short_cuts, @{$u->{col_names}{$union_table}} ];
-            unshift @$choices, undef if $opt->{sssc_mode};
+            my @pre = ( $info->{ok}, @short_cuts );
+            unshift @pre, undef if $opt->{sssc_mode};
+            my $choices = [ @pre, @{$u->{col_names}{$union_table}} ];
             print_union_statement( $info, $union );
             # Choose
-            my $col = choose(
+            my @col = choose(
                 $choices,
-                { %{$info->{lyt_stmt_h}}, prompt => 'Choose Column:' }
+                { %{$info->{lyt_stmt_h}}, prompt => 'Choose Column:', no_spacebar => [ 0 .. $#pre ] }
             );
-            if ( ! defined $col ) {
+            if ( ! @col || ! defined $col[0] ) {
                 if ( defined $union->{used_cols}{$union_table} ) {
                     delete $union->{used_cols}{$union_table};
                     next UNION_COLUMN;
@@ -675,7 +679,9 @@ sub union_tables {
                     last UNION_COLUMN;
                 }
             }
-            if ( $col eq $info->{ok} ) {
+            if ( $col[0] eq $info->{ok} ) {
+                shift @col;
+                push @{$union->{used_cols}{$union_table}}, @col;
                 if ( ! defined $union->{used_cols}{$union_table} ) {
                     my $idx = first_index { $_ eq $union_table } @{$union->{used_tables}};
                     my $tbl = splice( @{$union->{used_tables}}, $idx, 1 );
@@ -683,21 +689,21 @@ sub union_tables {
                 }
                 last UNION_COLUMN;
             }
-            if ( $col eq $void ) {
+            if ( $col[0] eq $void ) {
                 next UNION_COLUMN;
             }
-            if ( $col eq $privious_cols ) {
+            if ( $col[0] eq $privious_cols ) {
                 $union->{used_cols}{$union_table} = $union->{saved_cols};
                 next UNION_COLUMN if $opt->{sssc_mode};
                 last UNION_COLUMN;
             }
-            if ( $col eq $all_cols ) {
+            if ( $col[0] eq $all_cols ) {
                 @{$union->{used_cols}{$union_table}} = @{$u->{col_names}{$union_table}};
                 next UNION_COLUMN if $opt->{sssc_mode};
                 last UNION_COLUMN;
             }
             else {
-                push @{$union->{used_cols}{$union_table}}, $col;
+                push @{$union->{used_cols}{$union_table}}, @col;
             }
         }
         $union->{saved_cols} = $union->{used_cols}{$union_table} if defined $union->{used_cols}{$union_table};
@@ -1085,15 +1091,16 @@ sub read_table {
             $sql->{select_type} = 'chosen_cols';
 
             COLUMNS: while ( 1 ) {
-                my $choices = [ $info->{ok}, @cols ];
-                unshift @$choices, undef if $opt->{sssc_mode};
+                my @pre = ( $info->{ok} );
+                unshift @pre, undef if $opt->{sssc_mode};
+                my $choices = [ @pre, @cols ];
                 print_select_statement( $info, $sql, $table );
                 # Choose
-                my $print_col = choose(
+                my @print_col = choose(
                     $choices,
-                    { %lyt_stmt_h }
+                    { %lyt_stmt_h, no_spacebar => [ 0 .. $#pre ] }
                 );
-                if ( ! defined $print_col ) {
+                if ( ! @print_col || ! defined $print_col[0] ) {
                     if ( @{$sql->{quote}{chosen_cols}} ) {
                         $sql->{quote}{chosen_cols} = [];
                         $sql->{print}{chosen_cols} = [];
@@ -1105,7 +1112,12 @@ sub read_table {
                         last COLUMNS;
                     }
                 }
-                if ( $print_col eq $info->{ok} ) {
+                if ( $print_col[0] eq $info->{ok} ) {
+                    shift @print_col;
+                    for my $print_col ( @print_col ) {
+                        push @{$sql->{quote}{chosen_cols}}, $qt_columns->{$print_col};
+                        push @{$sql->{print}{chosen_cols}}, $print_col;
+                    }
                     if ( ! @{$sql->{quote}{chosen_cols}} ) {
                         $sql->{select_type} = '*';
                     }
@@ -1113,8 +1125,10 @@ sub read_table {
                     $sql->{print}{hidd} = [];
                     last COLUMNS;
                 }
-                push @{$sql->{quote}{chosen_cols}}, $qt_columns->{$print_col};
-                push @{$sql->{print}{chosen_cols}}, $print_col;
+                for my $print_col ( @print_col ) {
+                    push @{$sql->{quote}{chosen_cols}}, $qt_columns->{$print_col};
+                    push @{$sql->{print}{chosen_cols}}, $print_col;
+                }
             }
         }
         elsif( $custom eq $customize{'distinct'} ) {
@@ -1839,9 +1853,9 @@ sub set_operator_sql {
             $sql->{print}{$stmt} .= '(';
 
             IN: while ( 1 ) {
-                my $status = print_select_statement( $info, $sql, $table, 1 );
+                print_select_statement( $info, $sql, $table );
                 # Readline
-                my $value = local_readline( $info, { status => $status, prompt => 'Value: ' } );
+                my $value = local_readline( $info, { prompt => 'Value: ' } );
                 if ( ! defined $value ) {
                     $sql->{quote}{$args} = [];
                     $sql->{quote}{$stmt} = '';
@@ -1866,9 +1880,9 @@ sub set_operator_sql {
             }
         }
         elsif ( $operator =~ /^(?:NOT\s)?BETWEEN\z/ ) {
-            my $status1 = print_select_statement( $info, $sql, $table, 1 );
+            print_select_statement( $info, $sql, $table );
             # Readline
-            my $value_1 = local_readline( $info, { status => $status1, prompt => 'Value: ' } );
+            my $value_1 = local_readline( $info, { prompt => 'Value: ' } );
             if ( ! defined $value_1 ) {
                 $sql->{quote}{$args} = [];
                 $sql->{quote}{$stmt} = '';
@@ -1878,9 +1892,9 @@ sub set_operator_sql {
             $sql->{quote}{$stmt} .= ' ' . '?' .      ' AND';
             $sql->{print}{$stmt} .= ' ' . $value_1 . ' AND';
             push @{$sql->{quote}{$args}}, $value_1;
-            my $status2 = print_select_statement( $info, $sql, $table, 1 );
+            print_select_statement( $info, $sql, $table );
             # Readline
-            my $value_2 = local_readline( $info, { status => $status2, prompt => 'Value: ' } );
+            my $value_2 = local_readline( $info, { prompt => 'Value: ' } );
             if ( ! defined $value_2 ) {
                 $sql->{quote}{$args} = [];
                 $sql->{quote}{$stmt} = '';
@@ -1894,9 +1908,9 @@ sub set_operator_sql {
         elsif ( $operator =~ /REGEXP\z/ ) {
             my $case_sensitive = $opt->{regexp_case};
             $sql->{print}{$stmt} .= ' ' . $operator;
-            my $status = print_select_statement( $info, $sql, $table, 1 );
+            print_select_statement( $info, $sql, $table );
             # Readline
-            my $value = local_readline( $info, { status => $status, prompt => 'Pattern: ' } );
+            my $value = local_readline( $info, { prompt => 'Pattern: ' } );
             if ( ! defined $value ) {
                 $sql->{quote}{$args} = [];
                 $sql->{quote}{$stmt} = '';
@@ -1915,10 +1929,10 @@ sub set_operator_sql {
             push @{$sql->{quote}{$args}}, $value;
         }
         else {
-            my $status = print_select_statement( $info, $sql, $table, 1 );
+            print_select_statement( $info, $sql, $table );
             my $prompt = $operator =~ /LIKE\z/ ? 'Pattern: ' : 'Value: ';
             # Readline
-            my $value = local_readline( $info, { status => $status, prompt => $prompt } );
+            my $value = local_readline( $info, { prompt => $prompt } );
             if ( ! defined $value ) {
                 $sql->{quote}{$args} = [];
                 $sql->{quote}{$stmt} = '';
@@ -2163,12 +2177,14 @@ sub multi_options {
         $tmp->{$key} = $opt->{$key};
     }
     while ( 1 ) {
-        my $choices = [ undef ];
+        my @pre = ( undef, $info->{_confirm} );
+        my @print_keys;
         for my $key ( @keys ) {
             my $current = $values->[$tmp->{$key}];
-            push @$choices, sprintf "%-*s [%s]", $longest, $menu_hash->{$key}, $current;
+            push @print_keys, sprintf "%-*s [%s]", $longest, $menu_hash->{$key}, $current;
         }
-        push @$choices, $info->{_confirm};
+        my $choices = [ @pre, @print_keys ];
+        #push @$choices, $info->{_confirm};
         # Choose
         my $idx = choose(
             $choices,
@@ -2186,7 +2202,7 @@ sub multi_options {
             }
             return;
         }
-        my $key = $keys[$idx-1];
+        my $key = $keys[$idx-@pre];
         $tmp->{$key}++;
         $tmp->{$key} = 0 if $tmp->{$key} == @$values;
         $count++;
@@ -2510,6 +2526,7 @@ sub local_readline {
     my ( $info, $args ) = @_;
     my $str = '';
     local $| = 1;
+    print SAVE_CURSOR_POSITION;
     local_readline_print( $info, $args, $str );
     ReadMode 'cbreak';
     while ( 1 ) {
@@ -2541,11 +2558,8 @@ sub local_readline {
 
 sub local_readline_print {
     my ( $info, $args, $str ) = @_;
-    print CLEAR_SCREEN;
-    if ( defined $args->{status} ) {
-        my $line_fold = Text::LineFold->new( %{$info->{line_fold}}, ColMax => ( term_size() )[0] - 2 );
-        print $line_fold->fold( '', ' ' x $info->{stmt_init_tab}, $args->{status} );
-    }
+    print RESTORE_CURSOR_POSITION;
+    print CLEAR_TO_END_OF_SCREEN;
     print $args->{prompt} . ( $args->{no_echo} ? '' : $str );
 }
 
@@ -2642,12 +2656,13 @@ sub choose_list {
         my $prompt = $key_cur . join( ', ', map { "\"$_\"" } @$current ) . "\n";
         $prompt   .= $key_new . join( ', ', map { "\"$_\"" } @$new )     . "\n\n";
         $prompt   .= 'Choose:';
+        my @pre = ( undef, $info->{_confirm} );
         # Choose
-        my $choice = choose(
-            [ undef, $info->{_confirm}, map( "- $_", @$available ) ],
-            { %{$info->{lyt_3}}, prompt => $prompt, lf => [0,$length_key] }
+        my @choice = choose(
+            [ @pre, map( "- $_", @$available ) ],
+            { %{$info->{lyt_3}}, prompt => $prompt, lf => [ 0, $length_key ], no_spacebar => [ 0 .. $#pre ] }
         );
-        if ( ! defined $choice ) {
+        if ( ! @choice || ! defined $choice[0] ) {
             if ( @$new ) {
                 $new = [];
                 next;
@@ -2656,12 +2671,13 @@ sub choose_list {
                 return;
             }
         }
-        if ( $choice eq $info->{_confirm} ) {
+        if ( $choice[0] eq $info->{_confirm} ) {
+            shift @choice;
+            push @$new, map { s/^-\s//; $_ } @choice;
             return $new if @$new;
             return;
         }
-        $choice =~ s/^-\s//;
-        push @$new, $choice;
+        push @$new, map { s/^-\s//; $_ } @choice;
     }
 }
 
@@ -2741,7 +2757,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.018';
+our $VERSION = '0.019';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -3149,7 +3165,7 @@ C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.018
+Version 0.019
 
 =cut
 
@@ -3262,7 +3278,7 @@ Choose the needed operators.
 
 =head3 Parentheses
 
-Enable parentheses in WHERE and/or HAVING TO clauses.
+Enable parentheses in C<WHERE> and/or C<HAVING TO> clauses.
 
 =head3 Sssc Mode
 
@@ -3381,6 +3397,9 @@ comparison if C<sqlite_see_if_its_a_number> is enabled (default).
 =head4 Char_Length
 
 To remove a chosen scalar function from a column select the column with the function a second time.
+
+Experimental: In the COLUMNS menu it is possibly to select more columns at once with the C<SpaceBar> or the right mouse key if the
+mouse mode is enabled. It is still possible to choose single columns to get a user defined ordering of the columns.
 
 =head1 AUTHOR
 
