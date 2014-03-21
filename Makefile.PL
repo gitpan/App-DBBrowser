@@ -7,7 +7,6 @@ use ExtUtils::MakeMaker;
 my %prereqs_os_specific;
 if ( $^O eq 'MSWin32' ) {
     %prereqs_os_specific = (
-        'Term::Size::Win32'    => 0,
         'Win32::Console::ANSI' => 0,
     );
 }
@@ -47,14 +46,12 @@ WriteMakefile(
         'Getopt::Long'          => 0,
         'JSON::XS'              => 0,
         'List::MoreUtils'       => 0,
-        'List::Util'            => 0,
         'Pod::Usage'            => 0,
         'Scalar::Util'          => 0,
-        'Term::Choose'          => '1.103',
-        'Term::TablePrint'      => 0,
-        'Term::ReadKey'         => 0,
+        'Term::Choose'          => '1.105',
+        'Term::Choose::Util'    => 0,
+        'Term::TablePrint'      => '0.004',
         'Text::LineFold'        => 0,
-        'Unicode::GCString'     => 0,
         %prereqs_os_specific,
     },
     clean => {

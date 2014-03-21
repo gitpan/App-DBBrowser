@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.019';
+our $VERSION = '0.020';
 
 
 1;
@@ -21,7 +21,7 @@ App::DBBrowser - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.019
+Version 0.020
 
 =head1 SYNOPSIS
 
@@ -53,8 +53,7 @@ It is required Perl version 5.10.1 or greater.
 
 It is recommended to work with an UTF encoding since non mappable characters might break the output.
 
-See also the requirements mentioned in L<Term::Choose> (respective L<Term::Choose::Win32>) which itself is required by
-the C<db-browser>.
+See also the requirements mentioned in L<Term::Choose> which itself is required by the C<db-browser>.
 
 =head1 AUTHOR
 

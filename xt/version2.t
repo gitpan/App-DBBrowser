@@ -35,7 +35,7 @@ my $bin = 'bin/db-browser';
 open my $fh2, '<', $bin or die $!;
 my $count;
 while ( my $line = <$fh2> ) {
-    if ( $line =~ /^our\ \$VERSION\ =\ '(\d+\.\d\d\d)';/ ) {
+    if ( $line =~ /^#?our\ \$VERSION\ =\ '(\d+\.\d\d\d)';/ ) {
         $count++;
         if ( $count == 1 ) {
             $v_bin = $1;
