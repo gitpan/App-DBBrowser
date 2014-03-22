@@ -1,6 +1,10 @@
 Revision history for App-DBBrowser
 
 
+0.021   2014-03-22
+        - Bugfix in UNION.
+        - New: "ALL TABLES" in UNION.
+
 0.020   2014-03-21
         - Rewritten in OO style.
         - Outsourced code to "Term::Choose::Util".

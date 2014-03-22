@@ -4,7 +4,9 @@ use strict;
 use 5.10.1;
 no warnings 'utf8';
 
-our $VERSION = '0.020';
+our $VERSION = '0.021';
+
+use Encode::Locale qw();
 
 # App::DBBrowser::Browser;
 
@@ -28,7 +30,7 @@ use strict;
 use 5.10.1;
 no warnings 'utf8';
 
-our $VERSION = '0.020';
+our $VERSION = '0.021';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -583,9 +585,11 @@ sub __union_tables {
 
     UNION_TABLE: while ( 1 ) {
         my $enough_tables = '  Enough TABLES';
+        my $all_tables    = '  ALL TABLES';
+        my @pre_tbl  = ( undef, $enough_tables );
+        my @post_tbl = ( $all_tables, $self->{info}{_info} );
+        my $choices = [ @pre_tbl, map( "+ $_", @{$union->{used_tables}} ), @{$union->{unused_tables}}, @post_tbl ];
         $self->__print_union_statement( $union );
-        my @pre_tbl = ( undef, $enough_tables );
-        my $choices = [ @pre_tbl, map( "+ $_", @{$union->{used_tables}} ), @{$union->{unused_tables}}, $self->{info}{_info} ];
         # Choose
         my $idx_tbl = $no_lyt->choose(
             $choices,
@@ -610,17 +614,29 @@ sub __union_tables {
             return if ! @{$union->{used_tables}};
             last UNION_TABLE;
         }
+        if ( $union_table eq $all_tables ) {
+            $union = {
+                unused_tables => [ map { "- $_" } @{$u->{tables}} ],
+                used_tables   => [],
+                used_cols     => {},
+                saved_cols    => [],
+            };
+            $self->{union_all} = 1;
+            next UNION_TABLE;
+        }
         my $backup_union = clone( $union );
         $union_table =~ s/^[-+]\s//;
-        my $union_table_reset = 0;
-        my $idx = $idx_tbl - ( @pre_tbl + @{$union->{used_tables}} );
-        if ( $idx < 0 ) {
+        my $check_idx = $idx_tbl - ( @pre_tbl + @{$union->{used_tables}} );
+        if ( $check_idx < 0 ) {
+            my $idx_used = $idx_tbl - @pre_tbl;
             delete $union->{used_cols}{$union_table};
-            $union_table_reset = 1;
+            $self->{idx_reset_used_tables} = $idx_used;
         }
         else {
-            splice( @{$union->{unused_tables}}, $idx, 1 );
+            my $idx_unused = $check_idx;
+            splice( @{$union->{unused_tables}}, $idx_unused, 1 );
             push @{$union->{used_tables}}, $union_table;
+            $self->{idx_reset_used_tables} = -1;
         }
 
         UNION_COLUMN: while ( 1 ) {
@@ -641,6 +657,7 @@ sub __union_tables {
                     next UNION_COLUMN;
                 }
                 else {
+                    delete $self->{union_all} if $self->{union_all};
                     $union = clone( $backup_union );
                     last UNION_COLUMN;
                 }
@@ -650,10 +667,11 @@ sub __union_tables {
                 if ( @col ) {
                     push @{$union->{used_cols}{$union_table}}, @col;
                 }
-                if ( $union_table_reset && ! defined $union->{used_cols}{$union_table} ) {
-                    my $idx = $idx_tbl - @pre_tbl;
-                    my $tbl = splice( @{$union->{used_tables}}, $idx, 1 );
+                elsif ( ! defined $union->{used_cols}{$union_table} ) {
+                    my $tbl = splice( @{$union->{used_tables}}, $self->{idx_reset_used_tables}, 1 );
                     push @{$union->{unused_tables}}, "- $tbl";
+                    delete $self->{idx_reset_used_tables};
+                    delete $self->{union_all} if defined $self->{union_all};
                 }
                 last UNION_COLUMN;
             }
@@ -674,6 +692,20 @@ sub __union_tables {
                 push @{$union->{used_cols}{$union_table}}, @col;
             }
         }
+        if ( $self->{union_all} ) {
+            my @selected_cols = @{$union->{used_cols}{$union_table}};
+            $union = {
+                unused_tables => [],
+                used_tables   => [ @{$u->{tables}} ],
+                used_cols     => {},
+                saved_cols    => [],
+            };
+            for my $union_table ( @{$union->{used_tables}} ) {
+                @{$union->{used_cols}{$union_table}} = @selected_cols;
+            }
+            delete $self->{union_all};
+            last UNION_TABLE;
+        }
         $union->{saved_cols} = $union->{used_cols}{$union_table} if defined $union->{used_cols}{$union_table};
     }
     # column names in the result-set of a UNION are taken from the first query.
@@ -691,7 +723,12 @@ sub __union_tables {
         $union->{quote}{stmt} .= " FROM " . $dbh->quote_identifier( undef, $schema, $table );
         $union->{quote}{stmt} .= $c < @{$union->{used_tables}} ? " UNION ALL " : " )";
     }
-    $union->{quote}{stmt} .= " AS " . $dbh->quote_identifier( join '_', @{$union->{used_tables}} );
+    if ( $self->{union_all} ) {
+        $union->{quote}{stmt} .= " AS " . $dbh->quote_identifier( 'UNION_ALL_TABLES' );
+    }
+    else {
+        $union->{quote}{stmt} .= " AS " . $dbh->quote_identifier( join '_', @{$union->{used_tables}} );
+    }
     return $union;
 }
 
@@ -708,7 +745,9 @@ sub __print_union_statement {
         $str .= $c < @{$union->{used_tables}} ? " UNION ALL\n" : "\n";
     }
     if ( @{$union->{used_tables}} ) {
-        $str .= ") AS " . join( '_', @{$union->{used_tables}} ) . " \n";
+        $str .= ") AS ";
+        $str .= $self->{union_all} ? 'UNION_ALL_TABLES' : join '_', @{$union->{used_tables}};
+        $str .= " \n";
     }
     $str .= "\n";
     my $line_fold = Text::LineFold->new( %{$self->{info}{line_fold}}, ColMax => ( term_size() )[0] - 2 );
@@ -1969,7 +2008,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.020';
+our $VERSION = '0.021';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2524,7 +2563,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.020';
+our $VERSION = '0.021';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -2994,7 +3033,7 @@ C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.020
+Version 0.021
 
 =cut
 
@@ -3006,7 +3045,7 @@ Version 0.020
 
     db-browser -h|--help
 
-When the C<db-browser> is called with the argument C<-h|--help> it shows a menu - see L</Options>.
+When the C<db-browser> is called with the argument C<-h|--help> it shows a menu - see L</OPTIONS>.
 
 =head2 SQLite
 
@@ -3182,7 +3221,7 @@ If enabled the utf8 flag will be turned on for character data coming from the da
 
 For a more driver specific explanation see the documentation of the respective Perl DBI driver.
 
-With the C<Pg> driver in use it is available apart the "YES/NO" choices also a "AUTO" choice. If the L<DBD::Pg> version
+With the C<Pg> driver in use it is available - apart the "YES/NO" choices - also a "AUTO" choice. If the L<DBD::Pg> version
 is less than 3.0.0 "AUTO" is mapped to "YES". For the meaning of "AUTO" look in
 L<pg_enable_utf8|https://metacpan.org/pod/DBD::Pg#pg_enable_utf8-integer> for the value -1.
 
@@ -3227,7 +3266,7 @@ comparison if C<sqlite_see_if_its_a_number> is enabled (default).
 
 To remove a chosen scalar function from a column select the column with the function a second time.
 
-Experimental: In the COLUMNS menu it is possibly to select more columns at once with the C<SpaceBar> or the right mouse key if the
+In the COLUMNS menu it is possibly to select more columns at once with the C<SpaceBar> or the right mouse key if the
 mouse mode is enabled. It is still possible to choose single columns to get a user defined ordering of the columns.
 
 =head1 AUTHOR
