@@ -28,6 +28,7 @@ WriteMakefile(
     },
     AUTHOR           => 'Matthaeus Kiem <cuer2s@gmail.com>',
     NAME             => 'App::DBBrowser',
+    ABSTRACT_FROM    => 'lib/App/DBBrowser.pm',
     VERSION_FROM     => 'lib/App/DBBrowser.pm',
     EXE_FILES        => [ 'bin/db-browser' ],
     BUILD_REQUIRES   => {
@@ -50,9 +51,14 @@ WriteMakefile(
         'Scalar::Util'          => 0,
         'Term::Choose'          => '1.105',
         'Term::Choose::Util'    => 0,
-        'Term::TablePrint'      => '0.004',
+        'Term::TablePrint'      => '0.005',
         'Text::LineFold'        => 0,
         %prereqs_os_specific,
+    },
+    dist  => {
+        COMPRESS => 'gzip',
+        SUFFIX   => '.gz',
+        TARFLAGS => '--format=gnu -cvf',
     },
     clean => {
         FILES => 'App-DBBrowser-*',

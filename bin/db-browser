@@ -4,7 +4,7 @@ use strict;
 use 5.10.1;
 no warnings 'utf8';
 
-our $VERSION = '0.021';
+our $VERSION = '0.022';
 
 use Encode::Locale qw();
 
@@ -30,7 +30,7 @@ use strict;
 use 5.10.1;
 no warnings 'utf8';
 
-our $VERSION = '0.021';
+our $VERSION = '0.022';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -476,7 +476,13 @@ sub run {
                     elsif ( $table eq $union ) {
                         if ( ! eval {
                             $multi_table = $self->__union_tables( $dbh, $db, $schema, $data );
-                            $table = 'union_tables';
+                            if ( $self->{union_all} ) {
+                                $table = 'union_all_tables';
+                                delete $self->{union_all};
+                            }
+                            else {
+                                $table = 'union_tables';
+                            }
                             1 }
                         ) {
                             say 'Union tables:';
@@ -703,7 +709,6 @@ sub __union_tables {
             for my $union_table ( @{$union->{used_tables}} ) {
                 @{$union->{used_cols}{$union_table}} = @selected_cols;
             }
-            delete $self->{union_all};
             last UNION_TABLE;
         }
         $union->{saved_cols} = $union->{used_cols}{$union_table} if defined $union->{used_cols}{$union_table};
@@ -735,19 +740,30 @@ sub __union_tables {
 
 sub __print_union_statement {
     my ( $self, $union ) = @_;
-    my $str = "SELECT * FROM (\n";
-    my $c = 0;
-    for my $table ( @{$union->{used_tables}} ) {
-        ++$c;
-        $str .= "  SELECT ";
-        $str .= @{$union->{used_cols}{$table}//[]} ? join( ', ', @{$union->{used_cols}{$table}} ) : '?';
-        $str .= " FROM $table";
-        $str .= $c < @{$union->{used_tables}} ? " UNION ALL\n" : "\n";
+    my $str;
+    if ( $self->{union_all} ) {
+        $str = 'UNION ALL TABLES' . "\n" . 'Col: ';
+        if ( @{$union->{used_tables}} ) {
+            my $table = $union->{used_tables}[0];
+            $str .= join( ', ', @{$union->{used_cols}{$table}} ) if @{$union->{used_cols}{$table}//[]};
+        }
+        $str .= "\n";
     }
-    if ( @{$union->{used_tables}} ) {
-        $str .= ") AS ";
-        $str .= $self->{union_all} ? 'UNION_ALL_TABLES' : join '_', @{$union->{used_tables}};
-        $str .= " \n";
+    else {
+        $str = "SELECT * FROM (\n";
+        my $c = 0;
+        for my $table ( @{$union->{used_tables}} ) {
+            ++$c;
+            $str .= "  SELECT ";
+            $str .= @{$union->{used_cols}{$table}//[]} ? join( ', ', @{$union->{used_cols}{$table}} ) : '?';
+            $str .= " FROM $table";
+            $str .= $c < @{$union->{used_tables}} ? " UNION ALL\n" : "\n";
+        }
+        if ( @{$union->{used_tables}} ) {
+            $str .= ") AS ";
+            $str .= $self->{union_all} ? 'UNION_ALL_TABLES' : join '_', @{$union->{used_tables}};
+            $str .= " \n";
+        }
     }
     $str .= "\n";
     my $line_fold = Text::LineFold->new( %{$self->{info}{line_fold}}, ColMax => ( term_size() )[0] - 2 );
@@ -2008,7 +2024,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.021';
+our $VERSION = '0.022';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2563,7 +2579,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '0.021';
+our $VERSION = '0.022';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -3033,7 +3049,7 @@ C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.021
+Version 0.022
 
 =cut
 
@@ -3080,7 +3096,7 @@ To be able to use all the features of the C<db-browser> some basic SQL knowledge
 
 =item *
 
-the C<Arrow> keys (or C<hjkl>) to move up and down respective to move right and left.
+the C<Arrow> keys (or C<h,j,k,l>) to move up and down respective to move right and left.
 
 =item *
 
@@ -3117,7 +3133,8 @@ Set the number of spaces between columns.
 
 =head3 Colwidth
 
-Set the width the columns should have at least when printed.
+Columns with a width below or equal I<Colwidth> are only trimmed if it is still required to lower the row width despite
+all columns have been trimmed to I<Colwidth>.
 
 =head3 Undef
 
@@ -3142,7 +3159,7 @@ Choose the needed database drivers.
 
 =head3 Operators
 
-Choose the needed operators.
+Choose the required operators.
 
 =head3 Parentheses
 
@@ -3182,9 +3199,9 @@ If enabled system tables/schemas/databases are appended to the respective list.
 
 =head3 Regexp Case
 
-If enabled REGEXP will match case sensitive.
+If enabled C<REGEXP> will match case sensitive.
 
-With MySQL the sensitive match is achieved by enabling the BINARY operator.
+With MySQL the sensitive match is achieved by enabling the C<BINARY> operator.
 
 =head3 DB Login
 
@@ -3210,7 +3227,7 @@ Set Database defaults:
 
 =head4 See if it's a number
 
-If set to "YES" L<DBD::SQLite> tries to see if the bind values are number or not, and does not quote if they are
+If set to "YES" L<DBD::SQLite> tries to see if the bind values are numbers or not, and does not quote if they are
 numbers.
 
 See L<DBD::SQLite> for details. This is a SQLite-only option.
@@ -3221,7 +3238,7 @@ If enabled the utf8 flag will be turned on for character data coming from the da
 
 For a more driver specific explanation see the documentation of the respective Perl DBI driver.
 
-With the C<Pg> driver in use it is available - apart the "YES/NO" choices - also a "AUTO" choice. If the L<DBD::Pg> version
+With the Pg driver in use it is available - apart the "YES/NO" choices - also an "AUTO" choice. If the L<DBD::Pg> version
 is less than 3.0.0 "AUTO" is mapped to "YES". For the meaning of "AUTO" look in
 L<pg_enable_utf8|https://metacpan.org/pod/DBD::Pg#pg_enable_utf8-integer> for the value -1.
 
@@ -3245,7 +3262,7 @@ Changing the lock mode I<Lk[01]> will also reset the entire SQL.
 
 =head3 Scalar functions
 
-There is a hidden menu entry: selecting the prompt "Customize:" makes available some scalar functions:
+There is a hidden menu entry: selecting the prompt I<Customize:> makes available some scalar functions:
 
 =head4 Epoch_to_DateTime
 
