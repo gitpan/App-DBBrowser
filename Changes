@@ -1,6 +1,9 @@
 Revision history for App-DBBrowser
 
 
+0.023   2014-04-10
+        - Update documentation
+
 0.022   2014-03-24
         - Update "ALL TABLES" in UNION.
         - Mininum version of "Term::TablePrint" is now 0.005.
