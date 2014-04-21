@@ -1,10 +1,10 @@
 #!/usr/bin/env perl
 use warnings;
 use strict;
-use 5.10.1;
+use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.023';
+our $VERSION = '0.024';
 
 use Encode::Locale qw();
 
@@ -27,10 +27,10 @@ package App::DBBrowser::Browser;
 
 use warnings;
 use strict;
-use 5.10.1;
+use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.023';
+our $VERSION = '0.024';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -53,7 +53,6 @@ use if $^O eq 'MSWin32', 'Win32::Console::ANSI';
 
 BEGIN {
     decode_argv(); # not at the end of the BEGIN block if less than perl 5.16
-                   # if perl >= 5.16 Special blocks called in void context
     1;
 }
 
@@ -499,7 +498,7 @@ sub run {
                         my $pr_columns = [];
                         my $sql;
                         $sql->{strg_keys} = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
-                        $sql->{list_keys} = [ qw( chosen_cols aggr_cols where_args group_by_cols having_args limit_args hidd ) ];
+                        $sql->{list_keys} = [ qw( chosen_cols aggr_cols where_args group_by_cols having_args limit_args ) ];
                         $self->__reset_sql( $sql, $qt_columns );
 
                         $self->{info}{lock} = $self->{opt}{lock_stmt};
@@ -1064,7 +1063,8 @@ sub __reset_sql {
     @{$sql->{quote}}{ @{$sql->{strg_keys}} } = ( '' ) x  @{$sql->{strg_keys}};
     @{$sql->{print}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
     @{$sql->{quote}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
-    delete $sql->{backup_in_hidd};
+    $sql->{pr_col_with_hidd_func} = [];
+    delete $sql->{pr_backup_in_hidd};
 }
 
 
@@ -1136,7 +1136,7 @@ sub __read_table {
                     if ( @{$sql->{quote}{chosen_cols}} ) {
                         $sql->{quote}{chosen_cols} = [];
                         $sql->{print}{chosen_cols} = [];
-                        delete $sql->{backup_in_hidd}{chosen_cols};
+                        delete $sql->{pr_backup_in_hidd}{chosen_cols};
                         next COLUMNS;
                     }
                     else {
@@ -1153,8 +1153,8 @@ sub __read_table {
                     if ( ! @{$sql->{quote}{chosen_cols}} ) {
                         $sql->{select_type} = '*';
                     }
-                    delete $sql->{backup_in_hidd}{chosen_cols};
-                    $sql->{print}{hidd} = [];
+                    delete $sql->{pr_backup_in_hidd}{chosen_cols};
+                    $sql->{pr_col_with_hidd_func} = [];
                     last COLUMNS;
                 }
                 for my $print_col ( @print_col ) {
@@ -1214,7 +1214,7 @@ sub __read_table {
                     if ( @{$sql->{quote}{aggr_cols}} ) {
                         $sql->{quote}{aggr_cols} = [];
                         $sql->{print}{aggr_cols} = [];
-                        delete $sql->{backup_in_hidd}{aggr_cols};
+                        delete $sql->{pr_backup_in_hidd}{aggr_cols};
                         next AGGREGATE;
                     }
                     else {
@@ -1223,7 +1223,7 @@ sub __read_table {
                     }
                 }
                 if ( $aggr eq $self->{info}{ok} ) {
-                    delete $sql->{backup_in_hidd}{aggr_cols};
+                    delete $sql->{pr_backup_in_hidd}{aggr_cols};
                     if ( ! @{$sql->{quote}{aggr_cols}} && ! @{$sql->{quote}{group_by_cols}} ) {
                         $sql->{select_type} = '*';
                     }
@@ -1268,7 +1268,6 @@ sub __read_table {
                         $sql->{print}{aggr_cols} = [];
                         next AGGREGATE;
                     }
-                    # Non-destructive substitution if perl >= 5.14: $new = $old =~ s/pattern/replacement/r
                     ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
                     $sql->{print}{aggr_cols}[$i] .= $print_col . ")";
                     $sql->{quote}{aggr_cols}[$i] .= $quote_col . ")";
@@ -1281,7 +1280,7 @@ sub __read_table {
             }
         }
         elsif ( $custom eq $customize{'where'} ) {
-            my @cols = ( @$pr_columns, @{$sql->{print}{hidd}} );
+            my @cols = ( @$pr_columns, @{$sql->{pr_col_with_hidd_func}} );
             my $AND_OR = ' ';
             $sql->{quote}{where_args} = [];
             $sql->{quote}{where_stmt} = " WHERE";
@@ -1381,21 +1380,23 @@ sub __read_table {
             $sql->{select_type} = 'group_by_cols';
 
             GROUP_BY: while ( 1 ) {
-                my $choices = [ $self->{info}{ok}, @cols ];
-                unshift @$choices, undef if $self->{opt}{sssc_mode};
+                my @pre = ( $self->{info}{ok} );
+                unshift @pre, undef if $self->{opt}{sssc_mode};
+                my $choices = [ @pre, @cols ];
                 $self->__print_select_statement( $sql, $table );
                 # Choose
-                my $print_col = $stmt_h->choose(
-                    $choices
+                my @print_col = $stmt_h->choose(
+                    $choices,
+                    { no_spacebar => [ 0 .. $#pre ] }
                 );
-                if ( ! defined $print_col ) {
+                if ( ! @print_col || ! defined $print_col[0] ) {
                     if ( @{$sql->{quote}{group_by_cols}} ) {
                         $sql->{quote}{group_by_stmt} = " GROUP BY";
                         $sql->{print}{group_by_stmt} = " GROUP BY";
                         $sql->{quote}{group_by_cols} = [];
                         $sql->{print}{group_by_cols} = [];
                         $col_sep = ' ';
-                        delete $sql->{backup_in_hidd}{group_by_cols};
+                        delete $sql->{pr_backup_in_hidd}{group_by_cols};
                         next GROUP_BY;
                     }
                     else {
@@ -1403,23 +1404,34 @@ sub __read_table {
                         last GROUP_BY;
                     }
                 }
-                if ( $print_col eq $self->{info}{ok} ) {
+                if ( $print_col[0] eq $self->{info}{ok} ) {
+                    shift @print_col;
+                    for my $print_col ( @print_col ) {
+                        ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
+                        push @{$sql->{quote}{group_by_cols}}, $quote_col;
+                        push @{$sql->{print}{group_by_cols}}, $print_col;
+                        $sql->{quote}{group_by_stmt} .= $col_sep . $quote_col;
+                        $sql->{print}{group_by_stmt} .= $col_sep . $print_col;
+                        $col_sep = ', ';
+                    }
                     if ( $col_sep eq ' ' ) {
                         $sql->{quote}{group_by_stmt} = '';
                         $sql->{print}{group_by_stmt} = '';
                         if ( ! @{$sql->{quote}{aggr_cols}} ) {
                             $sql->{select_type} = '*';
                         }
-                        delete $sql->{backup_in_hidd}{group_by_cols};
+                        delete $sql->{pr_backup_in_hidd}{group_by_cols};
                     }
                     last GROUP_BY;
                 }
-                ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
-                push @{$sql->{quote}{group_by_cols}}, $quote_col;
-                push @{$sql->{print}{group_by_cols}}, $print_col;
-                $sql->{quote}{group_by_stmt} .= $col_sep . $quote_col;
-                $sql->{print}{group_by_stmt} .= $col_sep . $print_col;
-                $col_sep = ', ';
+                for my $print_col ( @print_col ) {
+                    ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
+                    push @{$sql->{quote}{group_by_cols}}, $quote_col;
+                    push @{$sql->{print}{group_by_cols}}, $print_col;
+                    $sql->{quote}{group_by_stmt} .= $col_sep . $quote_col;
+                    $sql->{print}{group_by_stmt} .= $col_sep . $print_col;
+                    $col_sep = ', ';
+                }
             }
         }
         elsif( $custom eq $customize{'having'} ) {
@@ -1556,7 +1568,7 @@ sub __read_table {
             my @not_hidd = map { /^(?:$f)\((.*)\)\z/ ? $1 : () } @{$sql->{print}{aggr_cols}};
             my @cols =
                 ( $sql->{select_type} eq '*' || $sql->{select_type} eq 'chosen_cols' )
-                ? ( @$pr_columns, @{$sql->{print}{hidd}} )
+                ? ( @$pr_columns, @{$sql->{pr_col_with_hidd_func}} )
                 : ( @{$sql->{print}{group_by_cols}}, @{$sql->{print}{aggr_cols}}, @not_hidd );
             my $col_sep = ' ';
             $sql->{quote}{order_by_stmt} = " ORDER BY";
@@ -1683,16 +1695,16 @@ sub __read_table {
                 $stmt_key = 'chosen_cols';
             }
             if ( $stmt_key eq 'chosen_cols' ) {
-                if ( ! $sql->{backup_in_hidd}{print}{$stmt_key} ) {
-                    @{$sql->{backup_in_hidd}{print}{$stmt_key}} = @{$sql->{print}{$stmt_key}};
+                if ( ! $sql->{pr_backup_in_hidd}{$stmt_key} ) {
+                    @{$sql->{pr_backup_in_hidd}{$stmt_key}} = @{$sql->{print}{$stmt_key}};
                 }
             }
             else {
-                if ( @{$sql->{print}{aggr_cols}} && ! $sql->{backup_in_hidd}{print}{aggr_cols} ) {
-                    @{$sql->{backup_in_hidd}{print}{'aggr_cols'}} = @{$sql->{print}{aggr_cols}};
+                if ( @{$sql->{print}{aggr_cols}} && ! $sql->{pr_backup_in_hidd}{aggr_cols} ) {
+                    @{$sql->{pr_backup_in_hidd}{'aggr_cols'}} = @{$sql->{print}{aggr_cols}};
                 }
-                if ( @{$sql->{print}{group_by_cols}} && ! $sql->{backup_in_hidd}{print}{group_by_cols} ) {
-                    @{$sql->{backup_in_hidd}{print}{'group_by_cols'}} = @{$sql->{print}{group_by_cols}};
+                if ( @{$sql->{print}{group_by_cols}} && ! $sql->{pr_backup_in_hidd}{group_by_cols} ) {
+                    @{$sql->{pr_backup_in_hidd}{'group_by_cols'}} = @{$sql->{print}{group_by_cols}};
                 }
             }
             my $changed = 0;
@@ -1737,13 +1749,13 @@ sub __read_table {
                         $stmt_key = 'aggr_cols';
                     }
                 }
-                if ( $sql->{print}{$stmt_key}[$i] ne $sql->{backup_in_hidd}{print}{$stmt_key}[$i] ) {
+                if ( $sql->{print}{$stmt_key}[$i] ne $sql->{pr_backup_in_hidd}{$stmt_key}[$i] ) {
                     if ( $stmt_key ne 'aggr_cols' ) {
-                        my $i = first_index { $sql->{print}{$stmt_key}[$i] eq $_ } @{$sql->{print}{hidd}};
-                        splice( @{$sql->{print}{hidd}}, $i, 1 );
+                        my $i = first_index { $sql->{print}{$stmt_key}[$i] eq $_ } @{$sql->{pr_col_with_hidd_func}};
+                        splice( @{$sql->{pr_col_with_hidd_func}}, $i, 1 );
                     }
-                    $sql->{print}{$stmt_key}[$i] = $sql->{backup_in_hidd}{print}{$stmt_key}[$i];
-                    $sql->{quote}{$stmt_key}[$i] = $qt_columns->{$sql->{backup_in_hidd}{print}{$stmt_key}[$i]};
+                    $sql->{print}{$stmt_key}[$i] = $sql->{pr_backup_in_hidd}{$stmt_key}[$i];
+                    $sql->{quote}{$stmt_key}[$i] = $qt_columns->{$sql->{pr_backup_in_hidd}{$stmt_key}[$i]};
                     $changed++;
                     next HIDDEN;
                 }
@@ -1774,7 +1786,7 @@ sub __read_table {
                 $sql->{print}{$stmt_key}[$i] = $print_hidd;
                 $qt_columns->{$print_hidd} = $quote_hidd;
                 if ( $stmt_key ne 'aggr_cols' ) { # WHERE: aggregate functions are not allowed
-                    push @{$sql->{print}{hidd}}, $print_hidd;
+                    push @{$sql->{pr_col_with_hidd_func}}, $print_hidd;
                 }
                 $changed++;
                 next HIDDEN;
@@ -2018,16 +2030,15 @@ sub __set_operator_sql {
 ########################################################################################################################
 ########################################################################################################################
 
-  # if perl >= 5.14: package block syntax - the package declaration could contain a code block:  package name { ... }
 { # open block
 
 package App::DBBrowser::Opt;
 
 use warnings;
 use strict;
-use 5.10.1;
+use 5.010001;
 
-our $VERSION = '0.023';
+our $VERSION = '0.024';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2582,9 +2593,9 @@ package App::DBBrowser::DB;
 
 use warnings;
 use strict;
-use 5.10.1;
+use 5.010001;
 
-our $VERSION = '0.023';
+our $VERSION = '0.024';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -2697,18 +2708,16 @@ sub get_db_handle {
                 my ( $number, $places ) = @_;
                 return if ! defined $number;
                 return $number if ! looks_like_number( $number );
-                return sprintf( "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places );
+                return sprintf "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places;
             }
         );
         $dbh->sqlite_create_function( 'bit_length', 1, sub {
-                my ( $string ) = @_;
                 use bytes;
-                return length( $string );
+                return length $_[0];
             }
         );
         $dbh->sqlite_create_function( 'char_length', 1, sub {
-                my ( $string ) = @_;
-                return length( $string );
+                return length $_[0];
             }
         );
     }
@@ -3052,7 +3061,7 @@ C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.023
+Version 0.024
 
 =cut
 
@@ -3087,7 +3096,7 @@ It is recommended to work with an UTF encoding. Non mappable characters might br
 
 It is required a terminal with a width of at least 40 print columns.
 
-Before the output leading and trailing spaces are removed from the array elements and spaces are squashed to a single
+Before the output leading and trailing spaces are removed from the elements and spaces are squashed to a single
 white-space.
 
 The elements in a column are right-justified if one or more elements of that column do not look like a number, else they
@@ -3281,21 +3290,27 @@ There is a hidden menu entry: selecting the prompt I<Customize:> makes available
 
 =head4 Truncate
 
-With SQLite the function C<TRUNCATE> returns stringified values:
+With SQLite the function C<TRUNCATE> is a user defined function which returns stringified values.
 
-- when comparing in C<WHERE> or C<HAVING TO> clauses with numbers take the non-truncated (original) value for the
+When comparing in C<WHERE> or C<HAVING TO> clauses with numbers take the non-truncated (original) value for the
 comparison if C<sqlite_see_if_its_a_number> is enabled (default).
 
-- also to get a numeric comparison in an C<ORDER BY> clause use the non-truncated (original) values for the ordering.
+Also to get a numeric comparison in an C<ORDER BY> clause use the non-truncated (original) values for the ordering.
 
 =head4 Bit_Length
 
+With SQLite the function C<Bit_Length> is a user defined function which uses the Perl builtin C<length>. To make
+C<length> return the number of bytes the C<bytes> pragma is C<use>d.
+
 =head4 Char_Length
+
+With SQLite the function C<Char_Length> is a user defined function which uses the Perl builtin C<length> to get the
+number of characters.
 
 To remove a chosen scalar function from a column select the column with the function a second time.
 
-In the COLUMNS menu it is possibly to select more columns at once with the C<SpaceBar> or the right mouse key if the
-mouse mode is enabled. It is still possible to choose single columns to get a user defined ordering of the columns.
+In the COLUMNS and C<GROUP BY> menu it is possibly to select more columns at once with the C<SpaceBar> or the right mouse key if the
+mouse mode is enabled.
 
 =head1 AUTHOR
 

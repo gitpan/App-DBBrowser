@@ -2,9 +2,9 @@ package App::DBBrowser;
 
 use warnings;
 use strict;
-use 5.10.1;
+use 5.010001;
 
-our $VERSION = '0.023';
+our $VERSION = '0.024';
 
 
 1;
@@ -21,7 +21,7 @@ App::DBBrowser - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.023
+Version 0.024
 
 =head1 SYNOPSIS
 

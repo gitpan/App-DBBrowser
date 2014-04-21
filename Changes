@@ -1,8 +1,13 @@
 Revision history for App-DBBrowser
 
 
+0.024   2014-04-21
+        - Bugfix in "backup_in_hidd".
+        - It is possible now also with "GROUP BY" to choose more than one column at once.
+        - Update documentation.
+
 0.023   2014-04-10
-        - Update documentation
+        - Update documentation.
 
 0.022   2014-03-24
         - Update "ALL TABLES" in UNION.
