@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.024';
+our $VERSION = '0.025';
 
 use Encode::Locale qw();
 
@@ -30,7 +30,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.024';
+our $VERSION = '0.025';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -1076,7 +1076,7 @@ sub __read_table {
     my %customize = (
         hidden          => 'Customize:',
         print_table     => 'Print TABLE',
-        columns         => '- COLUMNS',
+        columns         => '- SELECT',
         aggregate       => '- AGGREGATE',
         distinct        => '- DISTINCT',
         where           => '- WHERE',
@@ -1289,15 +1289,16 @@ sub __read_table {
             my $count = 0;
 
             WHERE: while ( 1 ) {
-                my $choices = [ $self->{info}{ok}, @cols ];
+                my @pre = ( $self->{info}{ok} );
+                unshift @pre, undef if $self->{opt}{sssc_mode};
+                my @choices = @cols;
                 if ( $self->{opt}{w_parentheses} ) {
-                    push @$choices, $unclosed ? ')' : '(';
+                    push @choices, $unclosed ? ')' : '(';
                 }
-                unshift @$choices, undef if $self->{opt}{sssc_mode};
                 $self->__print_select_statement( $sql, $table );
                 # Choose
                 my $print_col = $stmt_h->choose(
-                    $choices
+                    [ @pre, @choices ]
                 );
                 if ( ! defined $print_col ) {
                     if ( $sql->{quote}{where_stmt} ne " WHERE" ) {
@@ -1444,15 +1445,16 @@ sub __read_table {
             my $count = 0;
 
             HAVING: while ( 1 ) {
-                my $choices = [ $self->{info}{ok}, @{$self->{info}{avail_aggregate}}, map( '@' . $_, @{$sql->{print}{aggr_cols}} ) ];
+                my @pre = ( $self->{info}{ok} );
+                unshift @pre, undef if $self->{opt}{sssc_mode};
+                my @choices = ( @{$self->{info}{avail_aggregate}}, map( '@' . $_, @{$sql->{print}{aggr_cols}} ) );
                 if ( $self->{opt}{h_parentheses} ) {
-                    push @$choices, $unclosed ? ')' : '(';
+                    push @choices, $unclosed ? ')' : '(';
                 }
-                unshift @$choices, undef if $self->{opt}{sssc_mode};
                 $self->__print_select_statement( $sql, $table );
                 # Choose
                 my $aggr = $stmt_h->choose(
-                    $choices
+                    [ @pre, @choices ]
                 );
                 if ( ! defined $aggr ) {
                     if ( $sql->{quote}{having_stmt} ne " HAVING" ) {
@@ -2038,7 +2040,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.024';
+our $VERSION = '0.025';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2595,7 +2597,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.024';
+our $VERSION = '0.025';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -3061,7 +3063,7 @@ C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.024
+Version 0.025
 
 =cut
 
@@ -3085,7 +3087,8 @@ C<db-browser> called with C<-s|--search> causes a new search of SQLite databases
 
 =head1 DESCRIPTION
 
-Search and read in SQLite/MySQL/PostgreSQL databases.
+Search and read in SQLite/MySQL/PostgreSQL databases. The available DBI drivers are C<DBD::SQLite>, C<DBD::mysql> and
+C<DBD::Pg>.
 
 To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database
 privileges required for fetching the respective data.
@@ -3110,6 +3113,9 @@ The best way to find out how C<db-browser> works is calling C<db-browser>.
 
 To be able to use all the features of the C<db-browser> some basic SQL knowledge is required.
 
+If C<AGGREGATE> or C<GROUP BY> is set the C<SELECT> statement is automatically formed - a previous user defined
+C<SELECT> statement is reset. A user defined C<SELECT> resets a previous set C<AGGREGATE> or C<GROUP BY> statement.
+
 =head3 Keys to move around
 
 =over
@@ -3127,13 +3133,17 @@ the C<PageUp> key (or C<Ctrl-B>) to go back one page, the C<PageDown> key (or C<
 the C<Home> key (or C<Ctrl-A>) to jump to the beginning of the menu, the C<End> key (or C<Ctrl-E>) to jump to the end
 of the menu.
 
-=item *
-
-the C<Enter/Return> key to confirm a chosen menu item.
-
 =back
 
-With the option I<mouse mode> enabled it can be used the mouse with the left mouse key to navigate through the menus.
+With the option I<mouse> enabled it can be used the mouse with the left mouse key to navigate through the menus.
+
+To confirm a chosen menu item use the C<Enter/Return> key.
+
+When choosing columns for the C<SELECT> and C<GROUP BY> statement it is possible to select items with the C<SpaceBar>
+key before C<Enter/Return> is pressed. Then the list of items marked with the C<SpaceBar> including the highlighted
+item are added to the chosen items. If a mouse mode is enabled it can be used the right mouse key instead of the
+C<SpaceBar>. C<Ctrl-SpaceBar> (or C<Ctrl-@>) inverts the made choices - marked items are unmarked and unmarked items are
+marked.
 
 The C<q> key goes back (C<Ctrl-D> instead of C<q> if prompted for a string) in the menu hierarchy.
 
@@ -3274,8 +3284,6 @@ Set the string that will be shown on the screen instead of an undefined field.
 
 The following hints refer to the SQL menu - the menu which opens after a table was selected.
 
-If C<AGGREGATE> or/and C<GROUP BY> is set, the C<SELECT> statement is automatically formed.
-
 To reset a SQL "sub-statement" (e.g C<WHERE>) re-enter into the respective menu entry and choose C<'- OK -'>.
 
 Changing the I<lock> mode (Lk0,Lk1) will also reset the entire SQL.
@@ -3290,7 +3298,9 @@ There is a hidden menu entry: selecting the prompt I<Customize:> makes available
 
 =head4 Truncate
 
-With SQLite the function C<TRUNCATE> is a user defined function which returns stringified values.
+With SQLite the function C<TRUNCATE> is a user-defined function which returns stringified values:
+
+    return sprintf "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places;
 
 When comparing in C<WHERE> or C<HAVING TO> clauses with numbers take the non-truncated (original) value for the
 comparison if C<sqlite_see_if_its_a_number> is enabled (default).
@@ -3299,27 +3309,28 @@ Also to get a numeric comparison in an C<ORDER BY> clause use the non-truncated 
 
 =head4 Bit_Length
 
-With SQLite the function C<Bit_Length> is a user defined function which uses the Perl builtin C<length>. To make
+With SQLite the function C<Bit_Length> is a user-defined function which uses the Perl builtin C<length>. To make
 C<length> return the number of bytes the C<bytes> pragma is C<use>d.
 
 =head4 Char_Length
 
-With SQLite the function C<Char_Length> is a user defined function which uses the Perl builtin C<length> to get the
+With SQLite the function C<Char_Length> is a user-defined function which uses the Perl builtin C<length> to get the
 number of characters.
 
 To remove a chosen scalar function from a column select the column with the function a second time.
 
-In the COLUMNS and C<GROUP BY> menu it is possibly to select more columns at once with the C<SpaceBar> or the right mouse key if the
-mouse mode is enabled.
+=head1 SEE ALSO
 
-=head1 AUTHOR
-
-Matthäus Kiem <cuer2s@gmail.com>
+L<DBI>, L<DBD::SQLite>, L<DBD::mysql>, L<DBD::Pg>.
 
 =head1 CREDITS
 
 Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people form
 L<stackoverflow|http://stackoverflow.com> for the help.
+
+=head1 AUTHOR
+
+Matthäus Kiem <cuer2s@gmail.com>
 
 =head1 LICENSE AND COPYRIGHT
 
