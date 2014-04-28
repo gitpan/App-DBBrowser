@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.025';
+our $VERSION = '0.026';
 
 
 1;
@@ -21,7 +21,7 @@ App::DBBrowser - Search and read in SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 0.025
+Version 0.026
 
 =head1 SYNOPSIS
 

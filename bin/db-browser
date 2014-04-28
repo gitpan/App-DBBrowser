@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.025';
+our $VERSION = '0.026';
 
 use Encode::Locale qw();
 
@@ -30,7 +30,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.025';
+our $VERSION = '0.026';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -2040,7 +2040,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.025';
+our $VERSION = '0.026';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2597,7 +2597,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.025';
+our $VERSION = '0.026';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -3059,11 +3059,11 @@ __END__
 
 =head1 NAME
 
-C<db-browser> - Search and read in SQLite/MySQL/PostgreSQL databases.
+C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and there tables interactively.
 
 =head1 VERSION
 
-Version 0.025
+Version 0.026
 
 =cut
 
@@ -3113,8 +3113,16 @@ The best way to find out how C<db-browser> works is calling C<db-browser>.
 
 To be able to use all the features of the C<db-browser> some basic SQL knowledge is required.
 
+=head3 SQL menu
+
+The SQL menu is the menu which opens after a table was selected.
+
 If C<AGGREGATE> or C<GROUP BY> is set the C<SELECT> statement is automatically formed - a previous user defined
 C<SELECT> statement is reset. A user defined C<SELECT> resets a previous set C<AGGREGATE> or C<GROUP BY> statement.
+
+To reset a SQL "sub-statement" (e.g C<WHERE>) re-enter into the respective menu entry and choose C<'- OK -'>.
+
+Changing the I<lock> mode (Lk0,Lk1) resets the entire SQL.
 
 =head3 Keys to move around
 
@@ -3137,15 +3145,16 @@ of the menu.
 
 With the option I<mouse> enabled it can be used the mouse with the left mouse key to navigate through the menus.
 
-To confirm a chosen menu item use the C<Enter/Return> key.
+To confirm a chosen menu item use the C<Return> key.
 
 When choosing columns for the C<SELECT> and C<GROUP BY> statement it is possible to select items with the C<SpaceBar>
-key before C<Enter/Return> is pressed. Then the list of items marked with the C<SpaceBar> including the highlighted
+key before C<Return> is pressed. Then the list of items marked with the C<SpaceBar> including the highlighted
 item are added to the chosen items. If a mouse mode is enabled it can be used the right mouse key instead of the
 C<SpaceBar>. C<Ctrl-SpaceBar> (or C<Ctrl-@>) inverts the made choices - marked items are unmarked and unmarked items are
 marked.
 
-The C<q> key goes back (C<Ctrl-D> instead of C<q> if prompted for a string) in the menu hierarchy.
+To move backwards in the menu hierarchy one can press the C<q> key . When prompted for a string use C<Ctrl-D> instead of
+C<q>.
 
 =head2 OPTIONS
 
@@ -3160,15 +3169,17 @@ Shows the version and the path of the running C<db-browser> and the path of the 
 =head3 Colwidth
 
 Columns with a width below or equal I<Colwidth> are only trimmed if it is still required to lower the row width despite
-all columns have been trimmed to I<Colwidth>.
+all columns wider than I<Colwidth> have been trimmed to I<Colwidth>.
 
 =head3 DB Defaults
 
-Set Database defaults:
+Set Database defaults.
+
+The I<DB Defaults> can be overwritten for each Database with the Database menu entry "Database settings".
 
 =head4 See if it's a number
 
-If set to "YES" L<DBD::SQLite> tries to see if the bind values are numbers or not, and does not quote if they are
+If set to "YES" C<DBD::SQLite> tries to see if the bind values are numbers or not, and does not quote if they are
 numbers.
 
 See L<DBD::SQLite> for details. This is a SQLite-only option.
@@ -3181,7 +3192,7 @@ For a more driver specific explanation see the documentation of the respective P
 
 With the C<Pg> driver in use it is available - apart from the "YES/NO" choices - also an "AUTO" choice. If the L<DBD::Pg>
 version is less than 3.0.0 "AUTO" is mapped to "YES". For the meaning of "AUTO" look in
-L<pg_enable_utf8|https://metacpan.org/pod/DBD::Pg#pg_enable_utf8-integer> for the value -1.
+L<pg_enable_utf8|https://metacpan.org/pod/DBD::Pg#pg_enable_utf8-integer> for the value C<-1>.
 
 =head4 "Binary Filter"
 
@@ -3191,8 +3202,6 @@ If the data matches the repexp C</[\x00-\x08\x0B-\x0C\x0E-\x1F]/> it is consider
 
 Printing arbitrary binary data could break the output.
 
-I<DB Defaults> can be overwritten for each Database with the Database menu entry "Database settings".
-
 =head3 DB Drivers
 
 Choose the required database drivers.
@@ -3201,9 +3210,21 @@ Choose the required database drivers.
 
 Determine when C<db-browser> asks for the login data:
 
-- per-DB: log in data is asked once per database.
+=over
 
-- once: log in data is asked only once and then used for all connections.
+=item
+
+per-DB
+
+log in data is asked once per database.
+
+=item
+
+once
+
+log in data is asked only once and then used for all connections.
+
+=back
 
 This option has no meaning if the SQLite driver is in use.
 
@@ -3238,7 +3259,7 @@ Set the maximum number of fetched table rows. This can be overwritten by setting
 
 The fetched table rows are kept in memory.
 
-To disable the automatic limit set I<max rows> to 0.
+To disable the automatic limit set I<Max Rows> to 0.
 
 =head3 Metadata
 
@@ -3282,15 +3303,10 @@ Set the string that will be shown on the screen instead of an undefined field.
 
 =head2 HINTS
 
-The following hints refer to the SQL menu - the menu which opens after a table was selected.
-
-To reset a SQL "sub-statement" (e.g C<WHERE>) re-enter into the respective menu entry and choose C<'- OK -'>.
-
-Changing the I<lock> mode (Lk0,Lk1) will also reset the entire SQL.
-
 =head3 Scalar functions
 
-There is a hidden menu entry: selecting the prompt I<Customize:> makes available some scalar functions:
+There is a hidden menu entry: selecting the prompt line in the SQL menu - I<Customize:> - makes available some scalar
+functions.
 
 =head4 Epoch_to_DateTime
 
@@ -3298,7 +3314,7 @@ There is a hidden menu entry: selecting the prompt I<Customize:> makes available
 
 =head4 Truncate
 
-With SQLite the function C<TRUNCATE> is a user-defined function which returns stringified values:
+With SQLite the function C<TRUNCATE> is a user-defined function which returns stringified values.
 
     return sprintf "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places;
 
