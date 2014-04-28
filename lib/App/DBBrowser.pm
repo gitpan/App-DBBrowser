@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.026';
+our $VERSION = '0.027';
 
 
 1;
@@ -17,11 +17,11 @@ __END__
 
 =head1 NAME
 
-App::DBBrowser - Search and read in SQLite/MySQL/PostgreSQL databases.
+App::DBBrowser - Browse SQLite/MySQL/PostgreSQL databases and there tables interactively.
 
 =head1 VERSION
 
-Version 0.026
+Version 0.027
 
 =head1 SYNOPSIS
 
@@ -55,14 +55,14 @@ It is recommended to work with an UTF encoding since non mappable characters mig
 
 See also the requirements mentioned in L<Term::Choose> which itself is required by the C<db-browser>.
 
-=head1 AUTHOR
-
-Matthäus Kiem <cuer2s@gmail.com>
-
 =head1 CREDITS
 
 Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people form
 L<stackoverflow|http://stackoverflow.com> for the help.
+
+=head1 AUTHOR
+
+Matthäus Kiem <cuer2s@gmail.com>
 
 =head1 COPYRIGHT AND LICENSE
 

@@ -1,5 +1,5 @@
 ---
-abstract: 'Search and read in SQLite/MySQL/PostgreSQL databases.'
+abstract: 'Browse SQLite/MySQL/PostgreSQL databases and there tables interactively.'
 author:
   - 'Matthaeus Kiem <cuer2s@gmail.com>'
 build_requires:
@@ -39,4 +39,4 @@ requires:
   perl: '5.010001'
 resources:
   repository: https://github.com/kuerbis/App-DBBrowser.git
-version: '0.026'
+version: '0.027'

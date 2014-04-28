@@ -1,5 +1,5 @@
 {
-   "abstract" : "Search and read in SQLite/MySQL/PostgreSQL databases.",
+   "abstract" : "Browse SQLite/MySQL/PostgreSQL databases and there tables interactively.",
    "author" : [
       "Matthaeus Kiem <cuer2s@gmail.com>"
    ],
@@ -62,5 +62,5 @@
          "web" : "https://github.com/kuerbis/App-DBBrowser"
       }
    },
-   "version" : "0.026"
+   "version" : "0.027"
 }

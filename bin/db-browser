@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.026';
+our $VERSION = '0.027';
 
 use Encode::Locale qw();
 
@@ -30,7 +30,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.026';
+our $VERSION = '0.027';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -2040,7 +2040,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.026';
+our $VERSION = '0.027';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2597,7 +2597,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.026';
+our $VERSION = '0.027';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -3063,7 +3063,7 @@ C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and there tables intera
 
 =head1 VERSION
 
-Version 0.026
+Version 0.027
 
 =cut
 
