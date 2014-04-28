@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.027';
+our $VERSION = '0.028';
 
 use Encode::Locale qw();
 
@@ -30,7 +30,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.027';
+our $VERSION = '0.028';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -2040,7 +2040,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.027';
+our $VERSION = '0.028';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2597,7 +2597,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.027';
+our $VERSION = '0.028';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -3059,11 +3059,11 @@ __END__
 
 =head1 NAME
 
-C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and there tables interactively.
+C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and their tables interactively.
 
 =head1 VERSION
 
-Version 0.027
+Version 0.028
 
 =cut
 
@@ -3087,8 +3087,8 @@ C<db-browser> called with C<-s|--search> causes a new search of SQLite databases
 
 =head1 DESCRIPTION
 
-Search and read in SQLite/MySQL/PostgreSQL databases. The available DBI drivers are C<DBD::SQLite>, C<DBD::mysql> and
-C<DBD::Pg>.
+Search and read in SQLite/MySQL/PostgreSQL databases. With the C<db-browser> one can browse databases and their tables
+interactively. The available DBI drivers are C<DBD::SQLite>, C<DBD::mysql> and C<DBD::Pg>.
 
 To be able to browse database-, schema- and table-lists and the content of tables one needs to have the database
 privileges required for fetching the respective data.
