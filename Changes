@@ -1,6 +1,10 @@
 Revision history for App-DBBrowser
 
 
+0.029   2014-05-05
+        - Parentheses: the user can choose if the parentheses menu entry is located before or after the column names.
+        - Update documentation.
+
 0.028   2014-04-28
         - Bugfix documentation.
 

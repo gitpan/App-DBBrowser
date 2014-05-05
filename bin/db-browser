@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.028';
+our $VERSION = '0.029';
 
 use Encode::Locale qw();
 
@@ -30,7 +30,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.028';
+our $VERSION = '0.029';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -1292,7 +1292,10 @@ sub __read_table {
                 my @pre = ( $self->{info}{ok} );
                 unshift @pre, undef if $self->{opt}{sssc_mode};
                 my @choices = @cols;
-                if ( $self->{opt}{w_parentheses} ) {
+                if ( $self->{opt}{w_parentheses} == 1 ) {
+                    unshift @choices, $unclosed ? ')' : '(';
+                }
+                elsif ( $self->{opt}{w_parentheses} == 2 ) {
                     push @choices, $unclosed ? ')' : '(';
                 }
                 $self->__print_select_statement( $sql, $table );
@@ -1448,7 +1451,10 @@ sub __read_table {
                 my @pre = ( $self->{info}{ok} );
                 unshift @pre, undef if $self->{opt}{sssc_mode};
                 my @choices = ( @{$self->{info}{avail_aggregate}}, map( '@' . $_, @{$sql->{print}{aggr_cols}} ) );
-                if ( $self->{opt}{h_parentheses} ) {
+                if ( $self->{opt}{h_parentheses} == 1 ) {
+                    unshift @choices, $unclosed ? ')' : '(';
+                }
+                elsif ( $self->{opt}{h_parentheses} == 2 ) {
                     push @choices, $unclosed ? ')' : '(';
                 }
                 $self->__print_select_statement( $sql, $table );
@@ -2040,7 +2046,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.028';
+our $VERSION = '0.029';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -2089,8 +2095,8 @@ sub options {
             [ 'table_expand',       "- Print  Table",    [ 'Simple', 'Enchanted' ] ],
         ],
         _parentheses => [
-            [ 'w_parentheses', "- Parentheses in WHERE",     [ 'NO', 'YES' ] ],
-            [ 'h_parentheses', "- Parentheses in HAVING TO", [ 'NO', 'YES' ] ],
+            [ 'w_parentheses', "- Parentheses in WHERE",     [ 'NO', '(YES', 'YES(' ] ],
+            [ 'h_parentheses', "- Parentheses in HAVING TO", [ 'NO', '(YES', 'YES(' ] ],
         ],
         _env_dbi     => [
             [ 'env_dbi_user', "- Use DBI_USER", [ 'NO', 'YES' ] ],
@@ -2597,7 +2603,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.028';
+our $VERSION = '0.029';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );
@@ -3063,7 +3069,7 @@ C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and their tables intera
 
 =head1 VERSION
 
-Version 0.028
+Version 0.029
 
 =cut
 
@@ -3075,13 +3081,13 @@ Version 0.028
 
     db-browser -h|--help
 
-When the C<db-browser> is called with the argument C<-h|--help> it shows a menu - see L</OPTIONS>.
+When the C<db-browser> is called with the argument C<-h|--help>, it shows a menu - see L</OPTIONS>.
 
 =head2 SQLite
 
     db-browser [-s|--search] [directories to be searched]
 
-If no directories are passed the home directory is searched for SQLite databases.
+If no directories are passed, the home directory is searched for SQLite databases.
 
 C<db-browser> called with C<-s|--search> causes a new search of SQLite databases instead of using the cached data.
 
@@ -3117,12 +3123,12 @@ To be able to use all the features of the C<db-browser> some basic SQL knowledge
 
 The SQL menu is the menu which opens after a table was selected.
 
-If C<AGGREGATE> or C<GROUP BY> is set the C<SELECT> statement is automatically formed - a previous user defined
+If C<AGGREGATE> or C<GROUP BY> is set, the C<SELECT> statement is automatically formed; a previous user defined
 C<SELECT> statement is reset. A user defined C<SELECT> resets a previous set C<AGGREGATE> or C<GROUP BY> statement.
 
 To reset a SQL "sub-statement" (e.g C<WHERE>) re-enter into the respective menu entry and choose C<'- OK -'>.
 
-Changing the I<lock> mode (Lk0,Lk1) resets the entire SQL.
+Changing the I<lock> mode (C<Lk0>,C<Lk1>) resets the entire SQL.
 
 =head3 Keys to move around
 
@@ -3147,14 +3153,14 @@ With the option I<mouse> enabled it can be used the mouse with the left mouse ke
 
 To confirm a chosen menu item use the C<Return> key.
 
-When choosing columns for the C<SELECT> and C<GROUP BY> statement it is possible to select items with the C<SpaceBar>
+When choosing columns for the C<SELECT> and C<GROUP BY> statement, it is possible to select items with the C<SpaceBar>
 key before C<Return> is pressed. Then the list of items marked with the C<SpaceBar> including the highlighted
-item are added to the chosen items. If a mouse mode is enabled it can be used the right mouse key instead of the
+item are added to the chosen items. If a mouse mode is enabled, it can be used the right mouse key instead of the
 C<SpaceBar>. C<Ctrl-SpaceBar> (or C<Ctrl-@>) inverts the made choices - marked items are unmarked and unmarked items are
 marked.
 
-To move backwards in the menu hierarchy one can press the C<q> key . When prompted for a string use C<Ctrl-D> instead of
-C<q>.
+To move backwards in the menu hierarchy one can press the C<q> key . When prompted for a string, use C<Ctrl-D> instead
+of C<q>.
 
 =head2 OPTIONS
 
@@ -3179,26 +3185,26 @@ The I<DB Defaults> can be overwritten for each Database with the Database menu e
 
 =head4 See if it's a number
 
-If set to "YES" C<DBD::SQLite> tries to see if the bind values are numbers or not, and does not quote if they are
+If set to "YES", C<DBD::SQLite> tries to see if the bind values are numbers or not, and does not quote if they are
 numbers.
 
 See L<DBD::SQLite> for details. This is a SQLite-only option.
 
 =head4 Enable utf8
 
-If enabled the utf8 flag will be turned on for character data coming from the database.
+If I<Enable utf8> is enabled, the utf8 flag will be turned on for character data coming from the database.
 
 For a more driver specific explanation see the documentation of the respective Perl DBI driver.
 
-With the C<Pg> driver in use it is available - apart from the "YES/NO" choices - also an "AUTO" choice. If the L<DBD::Pg>
-version is less than 3.0.0 "AUTO" is mapped to "YES". For the meaning of "AUTO" look in
+With the C<Pg> driver in use it is available - apart from the "YES/NO" choices - also an "AUTO" choice. If the
+L<DBD::Pg> version is less than 3.0.0, "AUTO" is mapped to "YES". For the meaning of "AUTO" look in
 L<pg_enable_utf8|https://metacpan.org/pod/DBD::Pg#pg_enable_utf8-integer> for the value C<-1>.
 
 =head4 "Binary Filter"
 
 Print "BNRY" instead of arbitrary binary data.
 
-If the data matches the repexp C</[\x00-\x08\x0B-\x0C\x0E-\x1F]/> it is considered arbitrary binary data.
+If the data matches the repexp C</[\x00-\x08\x0B-\x0C\x0E-\x1F]/>, it is considered arbitrary binary data.
 
 Printing arbitrary binary data could break the output.
 
@@ -3263,7 +3269,7 @@ To disable the automatic limit set I<Max Rows> to 0.
 
 =head3 Metadata
 
-If enabled system tables/schemas/databases are appended to the respective list.
+If I<Metadata> is enabled, system tables/schemas/databases are appended to the respective list.
 
 =head3 Mouse Mode
 
@@ -3273,18 +3279,24 @@ Set the I<mouse mode> (see L<Term::Choose/mouse>).
 
 Choose the required operators.
 
+With this menu entry it is possible to mark items with the C<SpaceBar> key.
+
 =head3 Parentheses
 
 Enable parentheses in C<WHERE> and/or C<HAVING TO> clauses.
 
+- C<(YES>: the position of "(" in the menu is before the column names.
+
+- C<YES(>: the position of "(" in the menu is after the column names.
+
 =head3 ProgressBar
 
-Set the progress bar threshold. If the number of fields (rows x columns) is higher than the threshold a progress bar is
+Set the progress bar threshold. If the number of fields (rows x columns) is higher than the threshold, a progress bar is
 shown while preparing the data for the output.
 
 =head3 Regexp Case
 
-If enabled C<REGEXP> will match case sensitive.
+If I<Regexp Case> is enabled, C<REGEXP> will match case sensitive.
 
 With MySQL the sensitive match is achieved by enabling the C<BINARY> operator.
 
@@ -3318,7 +3330,7 @@ With SQLite the function C<TRUNCATE> is a user-defined function which returns st
 
     return sprintf "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places;
 
-When comparing in C<WHERE> or C<HAVING TO> clauses with numbers take the non-truncated (original) value for the
+When comparing in C<WHERE> or C<HAVING TO> clauses with numbers, take the non-truncated (original) value for the
 comparison if C<sqlite_see_if_its_a_number> is enabled (default).
 
 Also to get a numeric comparison in an C<ORDER BY> clause use the non-truncated (original) values for the ordering.

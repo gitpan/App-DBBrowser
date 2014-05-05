@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.028';
+our $VERSION = '0.029';
 
 
 1;
@@ -21,7 +21,7 @@ App::DBBrowser - Browse SQLite/MySQL/PostgreSQL databases and their tables inter
 
 =head1 VERSION
 
-Version 0.028
+Version 0.029
 
 =head1 SYNOPSIS
 
@@ -37,7 +37,7 @@ C<db-browser> called with C<-h|--help> shows a menu which offers also a HELP tex
 
     db-browser [-s|--search] [directories to be searched]
 
-If no directories are passed the home directory is searched for SQLite databases.
+If no directories are passed, the home directory is searched for SQLite databases.
 
 C<db-browser> called with C<-s|--search> causes a new search of SQLite databases.
 
