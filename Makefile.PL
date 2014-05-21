@@ -51,7 +51,7 @@ WriteMakefile(
         'Scalar::Util'          => 0,
         'Term::Choose'          => '1.105',
         'Term::Choose::Util'    => 0,
-        'Term::TablePrint'      => '0.005',
+        'Term::TablePrint'      => '0.010_01',
         'Text::LineFold'        => 0,
         %prereqs_os_specific,
     },

@@ -1,6 +1,12 @@
 Revision history for App-DBBrowser
 
 
+0.029_01   2014-05-21
+        - Each package has now its own file.
+        - Renamed the option "Expand" to "Enchant"
+        - Added the option "Table Header" in "Enchant".
+        - Update documentation.
+
 0.029   2014-05-05
         - Parentheses: the user can choose if the parentheses menu entry is located before or after the column names.
         - Update documentation.

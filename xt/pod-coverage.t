@@ -1,9 +1,9 @@
 use 5.010001;
 use strict;
 use warnings;
-use Test::More;
+use Test::More tests => 1;
 
 use Test::Pod::Coverage;
 use Pod::Coverage;
 
-all_pod_coverage_ok();
+pod_coverage_ok( "App::DBBrowser" );
