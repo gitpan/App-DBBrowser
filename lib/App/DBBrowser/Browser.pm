@@ -5,7 +5,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.029_01';
+our $VERSION = '0.029_02';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -54,7 +54,7 @@ sub new {
         _continue => '  CONTINUE',
         _info     => '  INFO',
         _reset    => '  RESET',
-        yes_no            => [ 'YES', 'NO' ],
+        yes_no            => [ 'NO', 'YES' ],
         line_fold         => { Charset=> 'utf8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
         sect_generic      => 'AAA_generic',
         stmt_init_tab     => 4,
@@ -496,6 +496,8 @@ sub run {
                                 push @$pr_columns, $col;
                             }
                         }
+                        $self->{opt}{binary_filter} =    $self->{opt}{$db_driver . '_' . $db}{_binary_filter}
+                                                      || $self->{opt}{$db_driver}{_binary_filter};
 
                         PRINT_TABLE: while ( 1 ) {
                             my $all_arrayref = $self->__read_table( $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns );

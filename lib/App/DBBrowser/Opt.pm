@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.029_01';
+our $VERSION = '0.029_02';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -209,16 +209,6 @@ sub __opt_choose_multi {
 sub __opt_choose_index {
     my ( $self, $key, $prompt, $list ) = @_;
     my $yn = 0;
-    if ( $list->[0] eq 'YES' && $list->[1] eq 'NO' ) {
-        $yn = 1;
-    }
-    if ( $yn ) {
-        if ( $self->{opt}{$key} == 0 ) {
-            $self->{opt}{$key} = 1;
-        } elsif ( $self->{opt}{$key} == 1 ) {
-            $self->{opt}{$key} = 0;
-        }
-    }
     my $current = $list->[$self->{opt}{$key}];
     # Choose
     my $idx = choose(
@@ -229,13 +219,6 @@ sub __opt_choose_index {
     return if $idx == 0;
     $idx--;
     $self->{opt}{$key} = $idx;
-    if ( $yn ) {
-        if ( $self->{opt}{$key} == 0 ) {
-            $self->{opt}{$key} = 1;
-        } elsif ( $self->{opt}{$key} == 1 ) {
-            $self->{opt}{$key} = 0;
-        }
-    }
     $self->{info}{write_config}++;
     return;
 }
@@ -292,7 +275,7 @@ sub __opt_readline {
 
 sub database_setting {
     my ( $self, $db ) = @_;
-    my $db_driver;
+    my ( $db_driver, $section );
     if ( ! defined $db ) {
         if ( @{$self->{opt}{db_drivers}} == 1 ) {
             $db_driver = $self->{opt}{db_drivers}[0];
@@ -305,20 +288,16 @@ sub database_setting {
             );
             return if ! defined $db_driver;
         }
-    }
-    else {
-        $db_driver = $self->{info}{db_driver};
-    }
-    my $section;
-    if ( ! defined $db ) {
         $section = $db_driver;
     }
     else {
-        $section = $db_driver . '_' . $db;
+        $db_driver = $self->{info}{db_driver};
+        $section   = $db_driver . '_' . $db;
         for my $key ( keys %{$self->{opt}{$db_driver}} ) {
             $self->{opt}{$section}{$key} //= $self->{opt}{$db_driver}{$key};
         }
     }
+
     my $orig = clone( $self->{opt} );
     my $menus = {
         SQLite => [
@@ -447,17 +426,6 @@ sub database_setting {
 
 sub __db_opt_choose_index {
     my ( $self, $section, $key, $prompt, $list ) = @_;
-    my $yn = 0;
-    if ( $list->[0] eq 'YES' && $list->[1] eq 'NO' ) {
-        $yn = 1;
-    }
-    if ( $yn ) {
-        if ( $self->{opt}{$section}{$key} == 0 ) {
-            $self->{opt}{$section}{$key} = 1;
-        } elsif ( $self->{opt}{$section}{$key} == 1 ) {
-            $self->{opt}{$section}{$key} = 0;
-        }
-    }
     my $current = $list->[$self->{opt}{$section}{$key}];
     # Choose
     my $idx = choose(
@@ -468,13 +436,6 @@ sub __db_opt_choose_index {
     return if $idx == 0;
     $idx--;
     $self->{opt}{$section}{$key} = $idx;
-    if ( $yn ) {
-        if ( $self->{opt}{$section}{$key} == 0 ) {
-            $self->{opt}{$section}{$key} = 1;
-        } elsif ( $self->{opt}{$section}{$key} == 1 ) {
-            $self->{opt}{$section}{$key} = 0;
-        }
-    }
     $self->{info}{write_config}++;
     return;
 }

@@ -1,6 +1,11 @@
 Revision history for App-DBBrowser
 
 
+0.029_02   2014-05-25
+        - Fixed option "Binary Filter".
+        - Removed the extra code which moved "YES" before "NO".
+        - Code refactoring.
+
 0.029_01   2014-05-21
         - Each package has now its own file.
         - Renamed the option "Expand" to "Enchant"

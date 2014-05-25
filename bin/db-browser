@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.029_01';
+our $VERSION = '0.029_02';
 
 use Encode::Locale qw();
 
@@ -31,7 +31,7 @@ C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and their tables intera
 
 =head1 VERSION
 
-Version 0.029_01
+Version 0.029_02
 
 =cut
 
@@ -196,6 +196,18 @@ log in data is asked only once and then used for all connections.
 
 This option has no meaning if the SQLite driver is in use.
 
+=head3 Enchant
+
+Set the behavior of different menus.
+
+For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Enchant> to "Memory" means: save the
+menu position.
+
+For "Print Table" setting I<Enchant> to "Expand" means: enable printing the chosen table row.
+
+For "Table Header" setting I<Enchant> to "Each page" means: print the Table Header on top of each page instead only on
+the first page.
+
 =head3 ENV DBI
 
 - use C<DBI_USER> as username for all database logins.
@@ -203,17 +215,6 @@ This option has no meaning if the SQLite driver is in use.
 - use C<DBI_PASS> as password for all database logins.
 
 This option has no meaning if the SQLite driver is in use.
-
-=head3 Expand
-
-Set the behavior of different menus.
-
-For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Expand> to "Enchanted" means: save the
-menu position.
-
-For "Print Table" "Enchanted" means: enable printing the chosen table row.
-
-For "Table Header" "Enchanted" means: print the Table Header on top of each page instead only on the first page.
 
 =head3 Lock
 
