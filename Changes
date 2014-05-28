@@ -1,6 +1,9 @@
 Revision history for App-DBBrowser
 
 
+0.031   2014-05-28
+        - Fixed bug in the option code.
+
 0.030   2014-05-28
         - Added an option to reset the database specific settings back to "Database defaults".
         - Code refactoring.

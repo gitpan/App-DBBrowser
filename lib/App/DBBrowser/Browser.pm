@@ -6,7 +6,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.030';
+our $VERSION = '0.031';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );

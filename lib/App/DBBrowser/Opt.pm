@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.030';
+our $VERSION = '0.031';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -76,7 +76,7 @@ sub options {
         );
         exit if ! defined $idx;
         my $key;
-        if ( $idx < $#pre ) {
+        if ( $idx <= $#pre ) {
             $key = $pre[$idx];
         }
         else {
