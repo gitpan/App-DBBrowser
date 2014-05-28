@@ -1,11 +1,12 @@
-package App::DBBrowser::Browser;
+package # hide from PAUSE
+App::DBBrowser::Browser;
 
 use warnings;
 use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.029_02';
+our $VERSION = '0.030';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -489,7 +490,7 @@ sub run {
                         }
                         else {
                             $select_from_stmt = "SELECT * FROM " . $dbh->quote_identifier( undef, $schema, $table );
-                            my $sth = $dbh->prepare( $select_from_stmt . " WHERE 1 = 0" );
+                            my $sth = $dbh->prepare( $select_from_stmt . " LIMIT 0" );
                             $sth->execute();
                             for my $col ( @{$sth->{NAME}} ) {
                                 $qt_columns->{$col} = $dbh->quote_identifier( $col );

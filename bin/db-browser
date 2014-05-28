@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.029_02';
+our $VERSION = '0.030';
 
 use Encode::Locale qw();
 
@@ -31,7 +31,7 @@ C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and their tables intera
 
 =head1 VERSION
 
-Version 0.029_02
+Version 0.030
 
 =cut
 
@@ -170,6 +170,10 @@ If the data matches the repexp C</[\x00-\x08\x0B-\x0C\x0E-\x1F]/>, it is conside
 
 Printing arbitrary binary data could break the output.
 
+=head4 RESET
+
+I<RESET> resets the values of the database back to the "Database defaults".
+
 =head3 DB Drivers
 
 Choose the required database drivers.
@@ -200,13 +204,12 @@ This option has no meaning if the SQLite driver is in use.
 
 Set the behavior of different menus.
 
-For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Enchant> to "Memory" means: save the
-menu position.
+For the menus "Choose Database", "Choose Schema" and "Choose Table" setting I<Enchant> to "Memory" means: save the menu
+position.
 
 For "Print Table" setting I<Enchant> to "Expand" means: enable printing the chosen table row.
 
-For "Table Header" setting I<Enchant> to "Each page" means: print the Table Header on top of each page instead only on
-the first page.
+For "Table Header" setting I<Enchant> to "Each page" means: print the Table Header on top of each page.
 
 =head3 ENV DBI
 

@@ -1,10 +1,11 @@
-package App::DBBrowser::DB;
+package # hide from PAUSE
+App::DBBrowser::DB;
 
 use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.029_02';
+our $VERSION = '0.030';
 
 use Encode       qw( encode decode );
 use File::Find   qw( find );

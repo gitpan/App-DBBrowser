@@ -1,10 +1,11 @@
-package App::DBBrowser::Opt;
+package # hide from PAUSE
+App::DBBrowser::Opt;
 
 use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.029_02';
+our $VERSION = '0.030';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -75,7 +76,7 @@ sub options {
         );
         exit if ! defined $idx;
         my $key;
-        if ( $idx < @pre ) {
+        if ( $idx < $#pre ) {
             $key = $pre[$idx];
         }
         else {
@@ -328,6 +329,7 @@ sub database_setting {
     my @pre = ( undef, $self->{info}{_confirm} );
     my @real = map { $_->[1] } @{$menus->{$db_driver}};
     my $choices = [ @pre, @real ];
+    push @$choices, "  RESET" if defined $db;
 
     DB_OPTION: while ( 1 ) {
         # Choose
@@ -337,8 +339,15 @@ sub database_setting {
         );
         exit if ! defined $idx;
         my $key;
-        if ( $idx < @pre ) {
+        if ( $idx <= $#pre ) {
             $key = $pre[$idx];
+        }
+        elsif ( $idx == @pre + @real ) {
+            for my $key ( keys %{$self->{opt}{$section}} ) {
+                $self->{opt}{$section}{$key} = undef;
+            }
+            $self->{info}{write_config}++;
+            next;
         }
         else {
             $idx -= @pre;
