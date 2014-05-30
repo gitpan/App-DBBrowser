@@ -1,6 +1,9 @@
 Revision history for App-DBBrowser
 
 
+0.032   2014-05-30
+        - Printing the table header on each page is not enabled by default.
+
 0.031   2014-05-28
         - Fixed bug in the option code.
 

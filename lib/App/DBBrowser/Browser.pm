@@ -6,7 +6,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.031';
+our $VERSION = '0.032';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -85,7 +85,7 @@ sub new {
         keep_schema_choice   => 0,
         keep_table_choice    => 0,
         table_expand         => 1,
-        keep_header          => 1,
+        keep_header          => 0,
         lock_stmt            => 0,
         max_rows             => 50_000,
         metadata             => 0,
