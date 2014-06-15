@@ -1,6 +1,11 @@
 Revision history for App-DBBrowser
 
 
+0.033   2014-06-15
+        - Raised the required minimum version of "Term::TablePrint" and "Term::Choose::Util".
+        - Changed the layout of the "Path" output.
+        - Fixed: a change of the setting of the option "mouse" is immediately effective.
+
 0.032   2014-05-30
         - Printing the table header on each page is not enabled by default.
 

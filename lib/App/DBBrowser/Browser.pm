@@ -6,7 +6,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.032';
+our $VERSION = '0.033';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -165,6 +165,12 @@ sub __init {
                 }
             }
             $opt = $obj_opt->options( $opt );
+            if ( defined $opt->{mouse} ) {
+                for my $key ( keys %{$self->{info}} ) {
+                    next if $key !~ /^lyt_/;
+                    $self->{info}{$key}{mouse} = $opt->{mouse};
+                }
+            }
         }
         1 }
     ) {
@@ -1807,7 +1813,6 @@ sub __read_table {
             }
             local $| = 1;
             print CLEAR_SCREEN;
-            #say 'Computing: ..' if $self->{opt}{progress_bar};
             say 'Database : ...' if $self->{opt}{progress_bar};
             my $sth = $dbh->prepare( $select );
             $sth->execute( @arguments );

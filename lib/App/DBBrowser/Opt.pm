@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.032';
+our $VERSION = '0.033';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );
@@ -107,15 +107,15 @@ sub options {
         }
         elsif ( $key eq $path ) {
             my $version = 'version';
-            my $bin     = 'bin';
-            my $app_dir = 'app dir';
+            my $bin     = '  bin  ';
+            my $app_dir = 'app-dir';
             my $path = {
                 $version => $main::VERSION,
                 $bin     => catfile( $RealBin, $RealScript ),
                 $app_dir => $self->{info}{app_dir},
             };
             my $keys = [ $version, $bin, $app_dir ];
-            print_hash( $path, { keys => $keys } );
+            print_hash( $path, { keys => $keys, preface => ' Close with ENTER' } );
         }
         elsif ( $key eq 'tab_width' ) {
             my $digits = 3;
