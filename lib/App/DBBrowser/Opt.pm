@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.010001;
 
-our $VERSION = '0.033';
+our $VERSION = '0.034';
 
 use Encode                qw( encode );
 use File::Basename        qw( basename );

@@ -4,7 +4,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.033';
+our $VERSION = '0.034';
 
 use Encode::Locale qw();
 
@@ -31,7 +31,7 @@ C<db-browser> - Browse SQLite/MySQL/PostgreSQL databases and their tables intera
 
 =head1 VERSION
 
-Version 0.033
+Version 0.034
 
 =cut
 
@@ -316,6 +316,8 @@ number of characters.
 To remove a chosen scalar function from a column select the column with the function a second time.
 
 =head1 REQUIREMENTS
+
+See L<Term::TablePrint/REQUIREMENTS>.
 
 =head2 Perl version
 

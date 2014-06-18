@@ -6,7 +6,7 @@ use strict;
 use 5.010001;
 no warnings 'utf8';
 
-our $VERSION = '0.033';
+our $VERSION = '0.034';
 
 use Encode                qw( decode );
 use File::Basename        qw( basename );
@@ -1647,7 +1647,7 @@ sub __read_table {
                 if ( $choice eq $self->{info}{ok} ) {
                     if ( ! @{$sql->{quote}{limit_args}} ) {
                         $sql->{quote}{limit_stmt} = '';
-                        $sql->{quote}{limit_stmt} = '';
+                        $sql->{print}{limit_stmt} = '';
                     }
                     last LIMIT;
                 }
