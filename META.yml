@@ -33,11 +33,11 @@ requires:
   Pod::Usage: '0'
   Scalar::Util: '0'
   Term::Choose: '1.105'
-  Term::Choose::Util: '0.010'
+  Term::Choose::Util: '0.011'
   Term::ReadKey: '0'
   Term::TablePrint: '0.013'
   Text::LineFold: '0'
   perl: '5.010001'
 resources:
   repository: https://github.com/kuerbis/App-DBBrowser.git
-version: 0.035_04
+version: '0.036'
