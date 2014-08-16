@@ -51,7 +51,7 @@
             "Term::ReadLine::Tiny" : "0",
             "Term::TablePrint" : "0.013",
             "Text::LineFold" : "0",
-            "perl" : "5.010001"
+            "perl" : "5.010000"
          }
       }
    },
@@ -63,5 +63,5 @@
          "web" : "https://github.com/kuerbis/App-DBBrowser"
       }
    },
-   "version" : "0.038"
+   "version" : "0.039"
 }
