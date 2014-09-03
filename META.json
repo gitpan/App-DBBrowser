@@ -48,7 +48,7 @@
             "Scalar::Util" : "0",
             "Term::Choose" : "1.105",
             "Term::Choose::Util" : "0.011",
-            "Term::ReadLine::Tiny" : "0",
+            "Term::ReadLine::Simple" : "0",
             "Term::TablePrint" : "0.013",
             "Text::LineFold" : "0",
             "perl" : "5.010000"
@@ -63,5 +63,5 @@
          "web" : "https://github.com/kuerbis/App-DBBrowser"
       }
    },
-   "version" : "0.039"
+   "version" : "0.040"
 }
