@@ -46,16 +46,17 @@
             "List::MoreUtils" : "0",
             "Pod::Usage" : "0",
             "Scalar::Util" : "0",
-            "Term::Choose" : "1.105",
-            "Term::Choose::Util" : "0.011",
+            "Term::Choose" : "1.116",
+            "Term::Choose::Util" : "0.016",
             "Term::ReadLine::Simple" : "0",
-            "Term::TablePrint" : "0.013",
+            "Term::TablePrint" : "0.017",
+            "Text::CSV" : "0",
             "Text::LineFold" : "0",
             "perl" : "5.010000"
          }
       }
    },
-   "release_status" : "stable",
+   "release_status" : "testing",
    "resources" : {
       "repository" : {
          "type" : "git",
@@ -63,5 +64,5 @@
          "web" : "https://github.com/kuerbis/App-DBBrowser"
       }
    },
-   "version" : "0.040"
+   "version" : "0.040_01"
 }
