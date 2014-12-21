@@ -37,7 +37,7 @@ requires:
   Scalar::Util: '0'
   Spreadsheet::Read: '0'
   Term::Choose: '0'
-  Term::Choose::Util: '0.020'
+  Term::Choose::Util: '0'
   Term::ReadLine::Simple: '0'
   Term::TablePrint: '0.021'
   Text::CSV: '0'
@@ -46,4 +46,4 @@ requires:
   perl: '5.008003'
 resources:
   repository: https://github.com/kuerbis/App-DBBrowser.git
-version: 0.049_08
+version: 0.049_09
