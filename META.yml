@@ -46,4 +46,4 @@ requires:
   perl: '5.008003'
 resources:
   repository: https://github.com/kuerbis/App-DBBrowser.git
-version: '0.990'
+version: '0.991'
